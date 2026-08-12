@@ -1,0 +1,243 @@
+/* =========================================================================
+   TickMark CLI — Webview Styles
+   ========================================================================= */
+
+:root {
+  --md-bg: #ffffff;
+  --md-fg: #1f2328;
+  --md-fg-muted: #59636e;
+  --md-border: #d1d9e0;
+  --md-code-bg: #f6f8fa;
+  --md-code-fg: #1f2328;
+  --md-link: #0969da;
+  --md-quote-border: #d1d9e0;
+  --md-quote-bg: #f6f8fa;
+  --md-table-head-bg: #f6f8fa;
+  --md-table-border: #d1d9e0;
+  --md-table-stripe: #fafbfc;
+  --md-hr: #d1d9e0;
+  --md-checkbox-accent: #0969da;
+  --md-btn-bg: #f6f8fa;
+  --md-btn-border: #d1d9e0;
+  --md-btn-fg: #59636e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-bg: #0d1117;
+    --md-fg: #e6edf3;
+    --md-fg-muted: #8d96a0;
+    --md-border: #3d444d;
+    --md-code-bg: #161b22;
+    --md-code-fg: #e6edf3;
+    --md-link: #4493f8;
+    --md-quote-border: #3d444d;
+    --md-quote-bg: #161b22;
+    --md-table-head-bg: #161b22;
+    --md-table-border: #3d444d;
+    --md-table-stripe: #161b22;
+    --md-hr: #3d444d;
+    --md-checkbox-accent: #4493f8;
+    --md-btn-bg: #21262d;
+    --md-btn-border: #3d444d;
+    --md-btn-fg: #8d96a0;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 48px 0;
+  background: var(--md-bg);
+  color: var(--md-fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ---- 工具栏 ---- */
+.tm-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--md-bg);
+  border-bottom: 1px solid var(--md-border);
+  font-size: 13px;
+}
+
+.tm-title {
+  font-weight: 700;
+  color: var(--md-checkbox-accent);
+}
+
+.tm-file {
+  color: var(--md-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.tm-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--md-btn-bg);
+  color: var(--md-fg);
+  border: 1px solid var(--md-btn-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tm-btn:hover { border-color: var(--md-checkbox-accent); color: var(--md-checkbox-accent); }
+
+/* ---- 内容区 ---- */
+.markdown-body {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 28px;
+}
+
+/* ---- 标题 ---- */
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  margin-top: 28px; margin-bottom: 16px; font-weight: 600; line-height: 1.25;
+}
+.markdown-body h1 { font-size: 1.8em; padding-bottom: .3em; border-bottom: 1px solid var(--md-border); }
+.markdown-body h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--md-border); }
+.markdown-body h3 { font-size: 1.25em; }
+.markdown-body h4 { font-size: 1em; }
+.markdown-body h5 { font-size: .875em; }
+.markdown-body h6 { font-size: .85em; color: var(--md-fg-muted); }
+
+.markdown-body p { margin: 0 0 16px 0; }
+.markdown-body a { color: var(--md-link); text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+
+/* ---- 列表 ---- */
+.markdown-body ul, .markdown-body ol { margin: 0 0 16px 0; padding-left: 2em; }
+.markdown-body li { margin-top: 4px; }
+
+/* ---- Checkbox ---- */
+.markdown-body .task-list-item { list-style: none; }
+.markdown-body .task-list-item-checkbox { margin: 0 6px 3px 0; }
+
+.markdown-body input[type="checkbox"] {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  width: 16px; height: 16px;
+  border: 2px solid var(--md-border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  transition: background-color .15s, border-color .15s;
+}
+.markdown-body input[type="checkbox"]:hover { border-color: var(--md-checkbox-accent); }
+.markdown-body input[type="checkbox"]:checked {
+  background-color: var(--md-checkbox-accent);
+  border-color: var(--md-checkbox-accent);
+}
+.markdown-body input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute; left: 4px; top: 1px;
+  width: 4px; height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ---- 代码 ---- */
+.markdown-body code {
+  font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  font-size: .875em;
+  padding: .2em .4em;
+  background: var(--md-code-bg);
+  border-radius: 4px;
+}
+.markdown-body pre {
+  font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  font-size: .875em;
+  background: var(--md-code-bg);
+  border: 1px solid var(--md-border);
+  border-radius: 6px;
+  padding: 16px;
+  overflow: auto;
+  position: relative;
+}
+.markdown-body pre code { padding: 0; background: none; }
+
+.code-copy-btn {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 11px; padding: 3px 10px;
+  background: var(--md-btn-bg);
+  color: var(--md-btn-fg);
+  border: 1px solid var(--md-btn-border);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.markdown-body pre:hover .code-copy-btn { opacity: 1; }
+.code-copy-btn:hover { color: var(--md-checkbox-accent); border-color: var(--md-checkbox-accent); }
+
+/* ---- 引用 ---- */
+.markdown-body blockquote {
+  margin: 0 0 16px 0;
+  padding: 8px 16px;
+  color: var(--md-fg-muted);
+  border-left: 4px solid var(--md-quote-border);
+  background: var(--md-quote-bg);
+  border-radius: 0 6px 6px 0;
+}
+.markdown-body blockquote > :first-child { margin-top: 0; }
+.markdown-body blockquote > :last-child { margin-bottom: 0; }
+
+/* ---- 表格 ---- */
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 16px 0;
+  border: 1px solid var(--md-table-border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: block;
+  overflow-x: auto;
+}
+.markdown-body thead { background: var(--md-table-head-bg); }
+.markdown-body th, .markdown-body td {
+  padding: 8px 14px;
+  border: 1px solid var(--md-table-border);
+  text-align: left;
+}
+.markdown-body th { font-weight: 600; }
+.markdown-body tbody tr:nth-child(even) { background: var(--md-table-stripe); }
+.markdown-body tbody tr:hover { background: var(--md-code-bg); }
+
+/* ---- 图片 / 分割线 ---- */
+.markdown-body img { max-width: 100%; border-radius: 6px; }
+.markdown-body hr { height: 1px; border: 0; background: var(--md-hr); margin: 24px 0; }
+
+/* ---- Toast ---- */
+.tm-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: #1f2328;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  opacity: 1;
+  transition: opacity .4s, transform .4s;
+  z-index: 100;
+}
+.tm-toast-error { background: #d1242f; }
+.tm-toast-hide { opacity: 0; transform: translate(-50%, 8px); }

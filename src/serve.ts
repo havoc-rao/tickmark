@@ -1,0 +1,198 @@
+import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
+import { MarkdownEngine } from './markdownEngine';
+import { toggleCheckboxInFile } from './checkbox';
+import { renderPage, renderStandalonePage } from './page';
+
+export interface ServeResult {
+  server: http.Server;
+  port: number;
+  /** 生成的独立 HTML 文件路径（供 CodeBuddy/编辑器预览） */
+  htmlFile: string;
+}
+
+export interface ServeOptions {
+  port?: number;
+  host?: string;
+  /** 自定义 HTML 输出路径；默认系统临时目录 */
+  htmlFile?: string;
+  /** 是否生成独立 HTML 文件（默认 true，配合编辑器预览） */
+  generateHtml?: boolean;
+}
+
+/**
+ * 启动本地 HTTP 服务（常驻），负责 checkbox 回写：
+ * - POST /api/toggle  { line, checked } → 改写磁盘 md 文件
+ * - GET  /api/content → 返回最新 md 内容（页面刷新用）
+ * - GET  /            → 服务器模式渲染页（浏览器直接用）
+ *
+ * 同时生成一个独立 HTML 文件：CSS/JS 全部内联，注入 API 地址，
+ * 供 CodeBuddy/编辑器直接预览，点击 checkbox 走 fetch 回写到 CLI 进程。
+ */
+export function startServer(
+  filePath: string,
+  opts: ServeOptions = {},
+): Promise<ServeResult> {
+  const engine = new MarkdownEngine();
+  const absPath = path.resolve(filePath);
+  const mediaDir = path.join(__dirname, '..', 'media');
+  const host = opts.host || '127.0.0.1';
+
+  const server = http.createServer(async (req, res) => {
+    // CORS：独立 HTML（file:// 打开）fetch 本地服务需要
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    try {
+      const url = new URL(req.url || '/', `http://${req.headers.host || host}`);
+
+      // API: 切换 checkbox
+      if (url.pathname === '/api/toggle' && req.method === 'POST') {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = toggleCheckboxInFile(
+          absPath,
+          Number(data.line),
+          Boolean(data.checked),
+        );
+        res.writeHead(result.ok ? 200 : 409, {
+          'Content-Type': 'application/json; charset=utf-8',
+        });
+        res.end(JSON.stringify(result));
+        return;
+      }
+
+      // API: 读取最新 md 内容（页面刷新用）
+      if (url.pathname === '/api/content' && req.method === 'GET') {
+        const content = fs.readFileSync(absPath, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ content }));
+        return;
+      }
+
+      // 静态资源（服务器模式）
+      if (url.pathname === '/preview.js' || url.pathname === '/preview.css') {
+        const file = path.join(mediaDir, url.pathname);
+        if (fs.existsSync(file)) {
+          const ext = path.extname(file);
+          res.writeHead(200, {
+            'Content-Type':
+              ext === '.css' ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
+          });
+          res.end(fs.readFileSync(file));
+          return;
+        }
+      }
+
+      // 主页（服务器模式，浏览器直开用）
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        const content = fs.readFileSync(absPath, 'utf8');
+        const { html } = engine.render(content);
+        const page = renderPage({ title: path.basename(absPath), bodyHtml: html });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(page);
+        return;
+      }
+
+      // API: 服务器模式页面 HTML（独立文件 Sync 按钮 DOMParser 解析用）
+      if (url.pathname === '/api/html' && req.method === 'GET') {
+        const content = fs.readFileSync(absPath, 'utf8');
+        const { html } = engine.render(content);
+        const page = renderPage({ title: path.basename(absPath), bodyHtml: html });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(page);
+        return;
+      }
+
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not found');
+    } catch (err) {
+      console.error('[tickmark] request failed:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: String(err) }));
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(opts.port || 0, host, () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : opts.port || 0;
+
+      let htmlFile = '';
+      if (opts.generateHtml !== false) {
+        htmlFile = writeStandaloneHtml({
+          filePath: absPath,
+          outPath: opts.htmlFile,
+          engine,
+          apiBase: `http://${host}:${port}`,
+          mediaDir,
+        });
+      }
+
+      console.log('');
+      console.log('  TickMark  ─  Markdown preview');
+      console.log(`  File:   ${absPath}`);
+      if (htmlFile) {
+        console.log(`  HTML:   ${htmlFile}`);
+        console.log('  → 在 CodeBuddy/编辑器中预览该 HTML 文件，点击 checkbox 即回写 md');
+      }
+      console.log(`  API:    http://${host}:${port}   (Ctrl+C 退出)`);
+      console.log('');
+      resolve({ server, port, htmlFile });
+    });
+  });
+}
+
+/** 生成独立 HTML 文件：CSS/JS 内联 + 注入 API 地址 */
+function writeStandaloneHtml(params: {
+  filePath: string;
+  outPath?: string;
+  engine: MarkdownEngine;
+  apiBase: string;
+  mediaDir: string;
+}): string {
+  const { filePath, engine, apiBase, mediaDir } = params;
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  const { html } = engine.render(content);
+
+  const cssPath = path.join(mediaDir, 'preview.css');
+  const jsPath = path.join(mediaDir, 'preview.js');
+  const cssText = fs.existsSync(cssPath) ? fs.readFileSync(cssPath, 'utf8') : '';
+  const jsText = fs.existsSync(jsPath) ? fs.readFileSync(jsPath, 'utf8') : '';
+
+  // 默认与源文件同层：<原名>.tickmark.html（如 sample.md → sample.md.tickmark.html）
+  const base = path.basename(filePath);
+  const outPath =
+    params.outPath ||
+    path.join(path.dirname(filePath), `${base}.tickmark.html`);
+
+  const page = renderStandalonePage({
+    title: path.basename(filePath),
+    bodyHtml: html,
+    cssText,
+    jsText,
+    apiBase,
+  });
+
+  fs.writeFileSync(outPath, page, 'utf8');
+  return outPath;
+}
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk) => (data += chunk));
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
