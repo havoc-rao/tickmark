@@ -204,10 +204,11 @@ body {
   width: 100%;
   margin: 0 0 16px 0;
   border: 1px solid var(--md-table-border);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
   display: block;
   overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
 }
 .markdown-body thead { background: var(--md-table-head-bg); }
 .markdown-body th, .markdown-body td {
@@ -215,9 +216,228 @@ body {
   border: 1px solid var(--md-table-border);
   text-align: left;
 }
-.markdown-body th { font-weight: 600; }
+.markdown-body th {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  border-bottom: 2px solid color-mix(in srgb, var(--md-checkbox-accent, #0969da) 30%, var(--md-table-border));
+  transition: background-color .15s, color .15s;
+}
+.markdown-body th:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 12%, transparent);
+  color: var(--md-checkbox-accent, #0969da);
+}
+.markdown-body th.tm-num, .markdown-body td.tm-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-body td.tm-empty {
+  color: var(--md-fg-muted, #59636e);
+  font-style: italic;
+  opacity: .75;
+  user-select: none;
+}
+.markdown-body tbody tr { transition: background-color .12s; }
 .markdown-body tbody tr:nth-child(even) { background: var(--md-table-stripe); }
-.markdown-body tbody tr:hover { background: var(--md-code-bg); }
+.markdown-body tbody tr:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 7%, transparent);
+}
+
+/* ---- 表格列过滤（聚合统计 / 多选 / 全选 / 反选） ---- */
+.tm-tbl { margin: 0 0 16px 0; position: relative; }
+.tm-tbl-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: var(--md-code-bg, #f6f8fa);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.tm-tbl-sum {
+  color: var(--md-fg, #1f2328);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+.tm-tbl-sum::before {
+  content: '▤';
+  margin-right: 6px;
+  font-weight: 400;
+  color: var(--md-fg-muted, #59636e);
+  opacity: .8;
+}
+.tm-cf-cell { display: inline-flex; max-width: 150px; }
+.tm-cf-ic { display: inline-flex; flex: none; opacity: .8; }
+.tm-colfilter:hover .tm-cf-ic { opacity: 1; }
+.tm-colfilter.active .tm-cf-ic { opacity: 1; }
+.tm-colfilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 140px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.tm-colfilter:hover { border-color: var(--md-checkbox-accent, #0969da); color: var(--md-checkbox-accent, #0969da); }
+.tm-cf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-cf-num {
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--md-border, #d1d9e0);
+  color: var(--md-fg, #1f2328);
+}
+.tm-colfilter.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 10%, transparent);
+}
+.tm-colfilter.active .tm-cf-num { background: var(--md-checkbox-accent, #0969da); color: #fff; }
+.tm-tbl-clear {
+  margin-left: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: 1px dashed var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-tbl-clear:hover { color: #d1242f; border-color: #d1242f; }
+
+/* 过滤弹层（fixed 定位到 document.body，避免被 table overflow 裁剪） */
+.tm-fpop {
+  position: absolute; /* 相对 .tm-tbl 定位上下文，滚动时随容器天然跟随 */
+  z-index: 300;
+  display: none;
+  max-height: 400px;
+  overflow: hidden;
+  background: var(--md-bg, #ffffff);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  font-size: 12px;
+}
+.tm-fpop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 4px;
+  color: var(--md-fg-muted, #59636e);
+}
+.tm-fpop-master {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+.tm-fpop-master input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--md-checkbox-accent, #0969da);
+  cursor: pointer;
+}
+.tm-fpop-title {
+  font-weight: 600;
+  color: var(--md-fg, #1f2328);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-fpop-search {
+  width: calc(100% - 20px);
+  margin: 4px 10px 6px;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tm-fpop-actions { display: flex; gap: 8px; padding: 0 10px 6px; }
+.tm-fpop-actions button {
+  padding: 2px 10px;
+  font-size: 11px;
+  background: transparent;
+  color: var(--md-link, #0969da);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-fpop-actions button:hover { border-color: var(--md-checkbox-accent, #0969da); }
+.tm-fpop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-border, #d1d9e0) transparent;
+}
+.tm-fpop-list::-webkit-scrollbar { width: 8px; }
+.tm-fpop-list::-webkit-scrollbar-track { background: transparent; }
+.tm-fpop-list::-webkit-scrollbar-thumb {
+  background: var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.tm-fpop-list::-webkit-scrollbar-thumb:hover { background-color: var(--md-fg-muted, #59636e); }
+.tm-fpop-list li label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color .1s;
+}
+.tm-fpop-list li label:hover { background: var(--md-code-bg, #f6f8fa); }
+.tm-fpop-list li.selected label {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 8%, transparent);
+}
+.tm-fpop-list li.selected label:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 14%, transparent);
+}
+.tm-fpop-list input[type="checkbox"] { accent-color: var(--md-checkbox-accent, #0969da); }
+.tm-fpop-val {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-fpop-cnt {
+  color: var(--md-fg-muted, #59636e);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 20px;
+  padding: 0 6px;
+  text-align: center;
+  background: var(--md-code-bg, #f6f8fa);
+  border-radius: 8px;
+}
+.tm-fpop-empty { color: var(--md-fg-muted, #59636e); padding: 6px 8px 8px; }
 
 /* ---- 图片 / 分割线 ---- */
 .markdown-body img { max-width: 100%; border-radius: 6px; }

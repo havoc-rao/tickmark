@@ -25,9 +25,10 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "build": "tsc -p ./",
     "prepublishOnly": "npm run compile",
-    "release": "release-it --config scripts/release-it.json"
+    "release": "release-it --config scripts/release-it.json",
+    "link": "npm run build && npm link"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",

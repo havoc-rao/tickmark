@@ -5,6 +5,7 @@
 ## 特性
 
 - **GFM 表格** — 标准 markdown-it 表格渲染（对齐、单元格内格式、竖线转义）
+- **表格列过滤** — 每列支持过滤：自动统计列内取值分布（聚合计数），弹层内多选 / 全选 / 反选 / 清空，过滤即时生效，多列叠加（列内 OR、跨列 AND）
 - **Checkbox 回写** — 预览页点击 `- [ ]` / `- [x]`，直接改写磁盘上的 `.md` 源文件
 - **代码高亮** — highlight.js 高亮 + 一键复制按钮
 - **独立 HTML 预览** — `serve` 生成单文件 HTML（CSS/JS 全部内联），IDE 直接打开即可交互
@@ -34,7 +35,7 @@ npm i -g tickmark-cli
 ### serve — 交互式预览（推荐）
 
 ```bash
-tickmark serve <file.md> [--port <n>] [--html <path>] [--no-open]
+tickmark serve <file.md> [--port <n>] [--html <path>] [--no-open] [--ide <name>]
 timd    serve <file.md> --no-open
 ```
 
@@ -42,6 +43,7 @@ timd    serve <file.md> --no-open
 - 点击 checkbox → 实时回写源 md（HTTP POST `/api/toggle`，0-based 行号定位）
 - `Ctrl+C` 退出时自动删除生成的 HTML
 - `--no-open` 跳过自动打开；`--html` 指定 HTML 输出位置
+- `--ide <name>` 单次指定用哪个 IDE 打开（如 `--ide cursor`），不改变默认设置
 
 ### render — 静态渲染
 
@@ -61,10 +63,19 @@ timd render README.md --out readme.html
 
 ## IDE 打开命令配置
 
+用 `tickmark ide` 可以自选预览用的 IDE（`code` / `buddycn` / `cursor` / `vim` 等，支持探测本机安装情况）：
+
+```bash
+tickmark ide                 # 列出本机已安装的（预设）IDE，标记当前默认
+tickmark ide list            # 同上
+tickmark ide set cursor      # 设置默认用 Cursor 打开（写入 ~/.config/tickmark/config.json）
+```
+
 打开命令解析优先级（高 → 低）：
 
-1. 环境变量：`export TICKMARK_OPEN_CMD="buddycn"`（或 `"code -r"` 等带参命令）
-2. 配置文件 `~/.tickmarkrc.json`：
+1. 单次指定：`tickmark serve x.md --ide code`（也支持带参，如 `--ide "code -r"`）
+2. 环境变量：`export TICKMARK_OPEN_CMD="buddycn"`（或 `"code -r"` 等带参命令）
+3. 配置文件 `~/.config/tickmark/config.json`（`tickmark ide set` 写入）：
    ```json
    { "openCommand": "buddycn" }
    ```
@@ -72,7 +83,9 @@ timd render README.md --out readme.html
    ```json
    { "openCommand": ["code", "-r"] }
    ```
-3. 默认按序探测 `buddycn` → `code`，找不到则提示手动打开
+4. 默认按序探测预设 IDE `buddycn` → `code` → `cursor` → …，找不到则提示手动打开
+
+预设 IDE 见 `tickmark ide` 输出（含 macOS `/Applications` 应用探测）；`--ide` 指定的命令不存在时自动回退到默认配置。
 
 ## 测试样例
 
