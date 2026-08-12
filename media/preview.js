@@ -64,8 +64,7 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           if (!data.content) throw new Error('empty content');
-          // 用 hidden iframe 渲染最新内容再替换 body（保留 toolbar）
-          var toolbar = document.querySelector('.tm-toolbar');
+          // 用 fetch 到的最新整页 HTML 里的 .markdown-body 替换现有正文（保留 toolbar）
           fetch(api('/api/html'))
             .then(function (r) { return r.text(); })
             .then(function (pageHtml) {
@@ -77,6 +76,7 @@
                   oldBody.parentNode.replaceChild(newBody, oldBody);
                 }
                 initTableFilters();
+                initOutline();
                 showToast('已同步最新内容', false);
               }
             })
@@ -550,7 +550,9 @@
       }
       return;
     }
+    if (closest(t, '#tm-outline, #tm-outline-wrap')) return; // 大纲内部点击不关闭
     closePopup();
+    closeOutline();
   });
 
   document.addEventListener('change', function (e) {
@@ -592,10 +594,267 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closePopup();
+    if (e.key === 'Escape') { closePopup(); closeOutline(); }
   });
 
   initTableFilters();
+
+  // ---- 大纲（TOC）：标题树 + 点击跳转 + 滚动高亮 ----
+  var TOC_OFFSET = 56;          // sticky 工具栏高度 + 余量
+  var tocWrap = null;
+  var tocPanel = null;
+  var tocToggle = null;
+  var tocList = null;
+  var tocItems = [];            // [{ el: heading, link: <a> }]
+  var tocSuppress = false;       // 程序滚动期间暂停高亮追踪
+  var tocSuppressTimer = 0;
+  var tocRaf = 0;
+
+  // 必须在上述 var 初始化之后调用：var 的初始化赋值在后，
+  // 若提前调用会把已设置的 tocPanel/tocToggle 引用重置为 null → 初次点击无反应
+  initOutline();
+
+  function ensureOutlineToggle() {
+    // 幂等：以 DOM 为准。若 DOM 已存在（残留 / 重复初始化）直接复用，
+    // 避免 Sync 后走同一初始化入口重复创建按钮 → 出现两个「大纲」。
+    var existingWrap = document.getElementById('tm-outline-wrap');
+    var existingBtn = existingWrap && existingWrap.querySelector('#tm-outline-toggle');
+    if (existingWrap && existingBtn) {
+      tocToggle = existingBtn;
+      tocWrap = existingWrap;
+      return;
+    }
+    if (tocToggle && !tocToggle.isConnected) { tocToggle = null; tocWrap = null; }
+    if (tocToggle) return;
+
+    var wrap = document.createElement('div');
+    wrap.id = 'tm-outline-wrap';
+    wrap.className = 'tm-outline-wrap';
+    var btn = document.createElement('button');
+    btn.id = 'tm-outline-toggle';
+    btn.className = 'tm-btn';
+    btn.type = 'button';
+    btn.title = '显示 / 隐藏标题大纲';
+    btn.innerHTML = '<span class="tm-toc-ic" aria-hidden="true">☰</span> 大纲';
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOutlineOpen(!(tocPanel && tocPanel.classList.contains('open')));
+    });
+    wrap.appendChild(btn);
+    var toolbar = document.querySelector('.tm-toolbar');
+    if (toolbar) {
+      var refresh = document.getElementById('tm-refresh');
+      if (refresh) toolbar.insertBefore(wrap, refresh);
+      else toolbar.appendChild(wrap);
+    } else {
+      btn.classList.add('tm-outline-fab');
+      document.body.appendChild(btn);
+    }
+    tocToggle = btn;
+    tocWrap = wrap;
+  }
+
+  function createOutlinePanel() {
+    // 幂等：若已存在则复用，避免重复挂载产生两份面板
+    var existingPanel = document.getElementById('tm-outline');
+    if (existingPanel) {
+      tocPanel = existingPanel;
+      tocList = existingPanel.querySelector('.tm-toc-list');
+      return;
+    }
+    var panel = document.createElement('aside');
+    panel.id = 'tm-outline';
+    panel.className = 'tm-outline';
+    panel.setAttribute('aria-label', '标题大纲');
+    panel.innerHTML =
+      '<div class="tm-toc-head">' +
+        '<span class="tm-toc-title">大纲</span>' +
+        '<button type="button" class="tm-toc-close" title="收起" aria-label="收起大纲">×</button>' +
+      '</div>' +
+      '<div class="tm-toc-body"><ul class="tm-toc-list"></ul></div>';
+    // 挂到 wrap 下：absolute 定位贴住按钮下方；toolbar sticky → 滚动时视觉固定
+    if (tocWrap && tocWrap.parentNode) tocWrap.appendChild(panel);
+    else document.body.appendChild(panel);
+    panel.querySelector('.tm-toc-close').addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOutlineOpen(false);
+    });
+    tocPanel = panel;
+    tocList = panel.querySelector('.tm-toc-list');
+  }
+
+  /** 从当前 .markdown-body 扫描标题，重建大纲列表（Sync 后调用以刷新引用） */
+  function buildOutline() {
+    var mdBody = document.querySelector('.markdown-body');
+    if (!mdBody || !tocPanel) return;
+    var headings = mdBody.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    var body = tocPanel.querySelector('.tm-toc-body');
+    body.innerHTML = '<ul class="tm-toc-list"></ul>';
+    tocList = body.querySelector('.tm-toc-list');
+    tocItems = [];
+    for (var i = 0; i < headings.length; i++) {
+      (function (h) {
+        var level = parseInt(h.tagName.charAt(1), 10);
+        var li = document.createElement('li');
+        li.className = 'tm-toc-item';
+        var a = document.createElement('a');
+        a.className = 'tm-toc-link';
+        a.href = '#';
+        a.setAttribute('data-level', String(level));
+        a.style.paddingLeft = (14 + (level - 1) * 12) + 'px';
+        var txt = (h.textContent || '').replace(/\s+/g, ' ').trim() || '(空标题)';
+        a.textContent = txt;
+        a.title = txt;
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          jumpToHeading(h);
+        });
+        li.appendChild(a);
+        tocList.appendChild(li);
+        tocItems.push({ el: h, link: a });
+      })(headings[i]);
+    }
+    if (!tocItems.length) {
+      var empty = document.createElement('div');
+      empty.className = 'tm-toc-empty';
+      empty.textContent = '暂无标题';
+      body.appendChild(empty);
+    }
+    updateActiveHeading();
+  }
+
+  function initOutline() {
+    ensureOutlineToggle();
+    if (!tocPanel) {
+      createOutlinePanel(); // 内部对 DOM 幂等复用
+      // 捕获阶段监听：正文若在内部容器里滚动，window 上收不到冒泡的 scroll 事件
+      window.addEventListener('scroll', onTocScroll, { passive: true, capture: true });
+      document.addEventListener('scroll', onTocScroll, { passive: true, capture: true });
+    }
+    buildOutline();
+  }
+
+  function setOutlineOpen(open) {
+    if (!tocPanel) return;
+    tocPanel.classList.toggle('open', open);
+    if (tocToggle) tocToggle.classList.toggle('active', open);
+    if (open) updateActiveHeading();
+  }
+
+  function closeOutline() { if (tocPanel) setOutlineOpen(false); }
+
+  /**
+   * 点击跳转：优先用原生 scrollIntoView（浏览器自行定位真实滚动祖先，
+   * 配合 CSS scroll-margin-top 让开 sticky 工具栏），手算 scrollTop 仅作兜底 ——
+   * 在编辑器 webview / iframe 里滚动容器未必是 documentElement，手算会失准。
+   */
+  function jumpToHeading(h) {
+    if (!h || !h.isConnected) {
+      // Sync 替换正文后旧标题引用已脱离 DOM（getBoundingClientRect 全 0 → 会被钳制回顶部）。
+      // 先按原索引重建引用，再定位到对应新节点，避免误跳 top。
+      var idx = -1;
+      if (h && tocItems.length) {
+        for (var k = 0; k < tocItems.length; k++) {
+          if (tocItems[k].el === h) { idx = k; break; }
+        }
+      }
+      buildOutline();
+      h = (idx >= 0 && tocItems[idx]) ? tocItems[idx].el : (tocItems.length ? tocItems[0].el : null);
+      if (!h) return;
+    }
+
+    suppressTracking();     // 滚动动画期间锁定高亮，停止后自动解锁
+    setActiveHeading(h);
+
+    var smooth = 'scrollBehavior' in document.documentElement.style;
+    if (h.scrollIntoView) {
+      try {
+        h.scrollIntoView(smooth ? { behavior: 'smooth', block: 'start' } : true);
+        return;
+      } catch (e) { /* 老浏览器不支持 options → 落到兜底 */ }
+    }
+    var scroller = findScroller(h);
+    var top;
+    if (scroller === window) {
+      var docTop = (document.scrollingElement || document.documentElement).scrollTop;
+      top = h.getBoundingClientRect().top + docTop - TOC_OFFSET;
+      window.scrollTo(0, Math.max(0, top));
+    } else {
+      top = h.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+        + scroller.scrollTop - TOC_OFFSET;
+      scroller.scrollTop = Math.max(0, top);
+    }
+  }
+
+  /** 向上找真正可滚动的祖先容器；都不可滚则返回 window */
+  function findScroller(el) {
+    var node = el.parentElement;
+    while (node && node !== document.body && node !== document.documentElement) {
+      var st = window.getComputedStyle(node);
+      var oy = st.overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight + 1) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return window;
+  }
+
+  /** 滚动动画期间暂停高亮追踪：滚动静止 160ms 后解锁，2s 兜底 */
+  function suppressTracking() {
+    tocSuppress = true;
+    clearTimeout(tocSuppressTimer);
+    var off = function () {
+      tocSuppress = false;
+      document.removeEventListener('scroll', settle, true);
+    };
+    var settle = function () {
+      clearTimeout(tocSuppressTimer);
+      tocSuppressTimer = setTimeout(off, 160);
+    };
+    document.addEventListener('scroll', settle, { passive: true, capture: true });
+    settle();
+    setTimeout(off, 2000);
+  }
+
+  function setActiveHeading(h) {
+    var body = tocPanel ? tocPanel.querySelector('.tm-toc-body') : null;
+    for (var i = 0; i < tocItems.length; i++) {
+      var on = tocItems[i].el === h;
+      tocItems[i].link.classList.toggle('active', on);
+      // 仅滚动大纲面板自身（scrollIntoView 可能连带滚动 html 打断页面滚动）
+      if (on && body && tocItems[i].el && tocItems[i].el.isConnected) {
+        var lRect = tocItems[i].link.getBoundingClientRect();
+        var pRect = body.getBoundingClientRect();
+        if (lRect.top < pRect.top || lRect.bottom > pRect.bottom) {
+          body.scrollTop += (lRect.top - pRect.top) - (pRect.height - lRect.height) / 2;
+        }
+      }
+    }
+  }
+
+  /** 滚动时高亮当前所在章节：取最后一条已越过顶部偏移线的标题 */
+  function updateActiveHeading() {
+    if (!tocItems.length) return;
+    var line = TOC_OFFSET + 6;
+    var activeEl = null;
+    for (var i = 0; i < tocItems.length; i++) {
+      if (!tocItems[i].el || !tocItems[i].el.isConnected) continue; // 旧节点脱离 DOM → 跳过
+      var r = tocItems[i].el.getBoundingClientRect();
+      if (r.top - line <= 0) activeEl = tocItems[i].el;
+      else break;
+    }
+    if (!activeEl) activeEl = tocItems[0].el;
+    setActiveHeading(activeEl);
+  }
+
+  function onTocScroll(e) {
+    // 忽略大纲面板自身的滚动，避免误触发高亮重算
+    if (e && e.target && e.target.nodeType === 1 && closest(e.target, '#tm-outline')) return;
+    if (tocSuppress || !tocPanel || !tocPanel.classList.contains('open')) return;
+    if (tocRaf) return;
+    tocRaf = requestAnimationFrame(function () { tocRaf = 0; updateActiveHeading(); });
+  }
 
   // ---- Toast 提示 ----
   function showToast(msg, isError) {

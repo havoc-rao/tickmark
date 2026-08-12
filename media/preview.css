@@ -104,9 +104,11 @@ body {
 }
 
 /* ---- 标题 ---- */
+/* 大纲 scrollIntoView 跳转时为 sticky 工具栏留白，避免标题被遮挡 */
 .markdown-body h1, .markdown-body h2, .markdown-body h3,
 .markdown-body h4, .markdown-body h5, .markdown-body h6 {
   margin-top: 28px; margin-bottom: 16px; font-weight: 600; line-height: 1.25;
+  scroll-margin-top: 56px;
 }
 .markdown-body h1 { font-size: 1.8em; padding-bottom: .3em; border-bottom: 1px solid var(--md-border); }
 .markdown-body h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--md-border); }
@@ -442,6 +444,101 @@ body {
 /* ---- 图片 / 分割线 ---- */
 .markdown-body img { max-width: 100%; border-radius: 6px; }
 .markdown-body hr { height: 1px; border: 0; background: var(--md-hr); margin: 24px 0; }
+
+/* ---- 大纲（TOC）：按钮下方下拉 list 浮层 ---- */
+.tm-outline-wrap { position: relative; display: inline-flex; }
+#tm-outline-toggle { display: inline-flex; align-items: center; gap: 4px; }
+#tm-outline-toggle .tm-toc-ic { font-size: 14px; line-height: 1; }
+#tm-outline-toggle.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+}
+.tm-outline-fab { /* 无工具栏时浮动按钮回退 */
+  position: fixed; right: 16px; bottom: 24px; z-index: 200;
+}
+
+#tm-outline {
+  position: absolute; /* 相对 .tm-outline-wrap（贴住按钮）；toolbar sticky → 滚动时视觉固定 */
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  max-height: min(340px, calc(100vh - 140px));
+  display: none;
+  flex-direction: column;
+  background: var(--md-bg, #ffffff);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  z-index: 300;
+  font-size: 13px;
+  overflow: hidden;
+}
+#tm-outline.open { display: flex; }
+.tm-toc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--md-border, #d1d9e0);
+}
+.tm-toc-title {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--md-fg-muted, #59636e);
+  text-transform: uppercase;
+}
+.tm-toc-close {
+  width: 22px; height: 22px;
+  line-height: 1;
+  font-size: 16px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-toc-close:hover { color: var(--md-fg, #1f2328); background: var(--md-code-bg, #f6f8fa); }
+.tm-toc-body {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-border, #d1d9e0) transparent;
+}
+.tm-toc-body::-webkit-scrollbar { width: 8px; }
+.tm-toc-body::-webkit-scrollbar-track { background: transparent; }
+.tm-toc-body::-webkit-scrollbar-thumb {
+  background: var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.tm-toc-list { list-style: none; margin: 0; padding: 6px 0; }
+.tm-toc-link {
+  display: block;
+  padding: 4px 14px;
+  color: var(--md-fg, #1f2328);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color .12s, border-color .12s, color .12s;
+}
+.tm-toc-link:hover {
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-checkbox-accent, #0969da);
+}
+.tm-toc-link.active {
+  border-left-color: var(--md-checkbox-accent, #0969da);
+  color: var(--md-checkbox-accent, #0969da);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 8%, transparent);
+}
+.tm-toc-empty { padding: 12px 14px; color: var(--md-fg-muted, #59636e); font-size: 12px; }
 
 /* ---- Toast ---- */
 .tm-toast {
