@@ -14,6 +14,7 @@ function usage(): void {
 TickMark CLI v${VERSION} — 快速把 md 渲染成 HTML，并支持 checkbox 点击回写源文件
 
 用法:
+  tickmark <file.md> [serve 选项]       # 简写，等价于 serve
   tickmark serve  <file.md> [--port <n>] [--html <path>] [--no-open]
                                生成同层 HTML（<原名>.tickmark.html），
                                自动用配置的 IDE 打开预览，
@@ -184,9 +185,9 @@ async function main(): Promise<void> {
       await cmdServe(rest);
       break;
     default:
-      console.error(`未知子命令: ${sub}`);
-      usage();
-      process.exit(1);
+      // 无子命令时默认按 serve 处理：timd <file.md> == timd serve <file.md>
+      await cmdServe([sub, ...rest]);
+      break;
   }
 }
 
