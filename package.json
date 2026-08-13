@@ -1,5 +1,5 @@
 {
-  "name": "tickmark-cli",
+  "name": "tickmark",
   "version": "0.2.0",
   "description": "TickMark CLI — render markdown to HTML with GFM tables, and toggle checkboxes that write back to the source .md file.",
   "license": "MIT",
@@ -24,13 +24,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
-  },
   "scripts": {
     "compile": "tsc -p ./",
     "build": "npm run compile",
-    "prepublishOnly": "npm run compile",
     "release": "release-it --config scripts/release-it.json",
     "link": "npm run build && npm link"
   },

@@ -19,14 +19,32 @@
 
 ## 安装
 
+### 一键安装（推荐）
+
 ```bash
-# 本地开发/全局链接
+curl -fsSL https://raw.githubusercontent.com/havoc-rao/tickmark/main/scripts/install.sh | sh
+```
+
+脚本会：下载最新 release 产物到 `~/.local/share/tickmark` → `npm install --omit=dev` 装运行时依赖 → 软链 `tickmark` / `timd` 到 `~/.local/bin`。
+
+> 若 `~/.local/bin` 不在 PATH，把 `export PATH="$HOME/.local/bin:$PATH"` 加到 `~/.zshrc` / `~/.bashrc`，重启 shell。
+
+**当前会话立即生效**（不重启 shell）：
+
+```bash
+eval "$(curl -fsSL https://raw.githubusercontent.com/havoc-rao/tickmark/main/scripts/install.sh | sh)"
+```
+
+前置要求：`node >= 18`、`npm`、`curl`、`tar`。
+
+### 本地开发
+
+```bash
+git clone https://github.com/havoc-rao/tickmark.git
+cd tickmark
 npm install
 npm run compile
-npm link
-
-# 或发布后全局安装
-npm i -g tickmark-cli
+npm link          # 全局软链 tickmark / timd
 ```
 
 安装后获得两个等价命令：

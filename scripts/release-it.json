@@ -9,10 +9,7 @@
     "requireUpstream": false
   },
   "npm": {
-    "publish": true,
-    "ignoreVersion": false,
-    "skipChecks": true,
-    "otp": true
+    "publish": false
   },
   "github": {
     "release": false

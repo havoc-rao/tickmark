@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  publish:
-    name: Publish to npm + GitHub Release
+  release:
+    name: Build & GitHub Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
           cache: npm
 
       - name: Install dependencies
@@ -29,14 +28,20 @@ jobs:
       - name: Compile
         run: npm run compile
 
-      - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Resolve version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Package tarball
+        run: |
+          mkdir -p dist
+          tar -czf dist/tickmark-${{ steps.ver.outputs.version }}.tar.gz \
+            bin media out package.json README.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          files: dist/tickmark-${{ steps.ver.outputs.version }}.tar.gz
           generate_release_notes: true
           draft: false
           prerelease: false
