@@ -318,17 +318,6 @@ export function startServer(
         });
       }
 
-      console.log('');
-      console.log('  TickMark  ─  Markdown preview');
-      console.log(`  File:   ${absPath}`);
-      console.log(`  Backup: ${backupPath}`);
-      console.log('  → 启动时已备份原始 md，重置 = 把备份放回；退出时自动删除备份');
-      if (htmlFile) {
-        console.log(`  HTML:   ${htmlFile}`);
-        console.log('  → 在 CodeBuddy/编辑器中预览该 HTML 文件，点击 checkbox 即回写 md');
-      }
-      console.log(`  API:    http://${host}:${port}   (Ctrl+C 退出)`);
-      console.log('');
       resolve({ server, port, htmlFile, backupFile: backupPath });
     });
   });

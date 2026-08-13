@@ -61,6 +61,7 @@ npm link          # 全局软链 tickmark / timd
 ```bash
 tickmark serve <file.md> [--port <n>] [--html <path>] [--no-open] [--ide <name>]
 timd    serve <file.md> --no-open
+timd    server <file.md>        # server 是 serve 的别名
 ```
 
 - 在同目录生成 `<原名>.tickmark.html`，用配置的 IDE 命令自动打开预览
@@ -77,12 +78,26 @@ tickmark render <file.md> [--out <file.html>]
 
 渲染为独立 HTML 文件（静态，无回写能力）。
 
+### update — 自动更新（GitHub）
+
+```bash
+timd update --check       # 只检查最新版本，不升级
+timd update               # 检测到新版本即自动升级
+timd update --force       # 强制重装（已是最新也执行）
+```
+
+- 通过 `releases/latest` 302 重定向解析最新 tag（与安装脚本一致，不受 API 限流影响；失败自动回退 GitHub API，可设 `GITHUB_TOKEN` 绕过限流）
+- **release 安装**（`install.sh` 装到 `~/.local/share/tickmark`）：下载 `tickmark_<version>.tar.gz` → 解压替换安装目录（保留 `node_modules` 增量装依赖）→ `npm install --omit=dev`
+- **git 源码安装**（目录含 `.git`）：校验工作区干净 → `git pull --ff-only` → `npm install --omit=dev` → `npm run compile`
+- 软链 `~/.local/bin/tickmark` / `timd` 指向同一安装目录，无需变动
+
 ### 示例
 
 ```bash
 timd serve README.md                  # 生成 README.md.tickmark.html 并打开
 timd serve examples/test-checkbox-table.md --no-open
 timd render README.md --out readme.html
+timd update --check                   # 检查是否有新版本
 ```
 
 ## IDE 打开命令配置
@@ -140,7 +155,12 @@ timd serve examples/test-checkbox-table.md
 
 ```
 bin/tickmark.js       CLI 入口（加载 out/cli.js）
-src/cli.ts            子命令解析（render / serve）
+src/cli.ts            子命令分发器（render / serve / ide / update）
+src/cli/serve.ts      serve 子命令（含 server 别名，HTTP 服务 + 独立 HTML 生成）
+src/cli/render.ts     render 子命令（静态渲染）
+src/cli/ide.ts        ide 子命令（查看/设置默认 IDE）
+src/cli/update.ts     update 子命令（GitHub 自动更新）
+src/cli/version.ts    版本读取与语义化比较（包根定位）
 src/serve.ts          HTTP 服务 + 独立 HTML 生成
 src/checkbox.ts       checkbox 回写磁盘逻辑
 src/table.ts          表格新增列 / 单元格回写磁盘逻辑

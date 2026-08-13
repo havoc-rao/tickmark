@@ -28,7 +28,7 @@
     "compile": "tsc -p ./",
     "build": "npm run compile",
     "release": "sh scripts/release.sh",
-    "link": "npm run build && npm link"
+    "builink": "npm run build && npm link"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",
