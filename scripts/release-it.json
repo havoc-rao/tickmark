@@ -12,7 +12,7 @@
     "publish": true,
     "ignoreVersion": false,
     "skipChecks": true,
-    "otp": "prompt"
+    "otp": true
   },
   "github": {
     "release": false
