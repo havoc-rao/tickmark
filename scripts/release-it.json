@@ -11,7 +11,8 @@
   "npm": {
     "publish": true,
     "ignoreVersion": false,
-    "skipChecks": true
+    "skipChecks": true,
+    "otp": "prompt"
   },
   "github": {
     "release": false
