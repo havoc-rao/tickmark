@@ -1,6 +1,6 @@
 {
   "name": "tickmark",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TickMark CLI — render markdown to HTML with GFM tables, and toggle checkboxes that write back to the source .md file.",
   "license": "MIT",
   "keywords": [
