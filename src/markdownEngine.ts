@@ -54,6 +54,11 @@ export class MarkdownEngine {
     return { html: this.md.render(text) };
   }
 
+  /** 暴露 markdown-it token 流（供表格范围定位 / 回写安全校验等使用） */
+  parse(text: string) {
+    return this.md.parse(text, {});
+  }
+
   private highlight(code: string, lang: string): string {
     const language = lang && hljs.getLanguage(lang) ? lang : '';
     try {

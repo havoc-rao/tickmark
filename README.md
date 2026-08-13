@@ -6,6 +6,10 @@
 
 - **GFM 表格** — 标准 markdown-it 表格渲染（对齐、单元格内格式、竖线转义）
 - **表格列过滤** — 每列支持过滤：自动统计列内取值分布（聚合计数），弹层内多选 / 全选 / 反选 / 清空，过滤即时生效，多列叠加（列内 OR、跨列 AND）
+- **表格新增列** — 任意位置加列：悬停任一表头点 `+`（在该列右侧插入）或点工具栏 `+ 列`（末尾插入），输入列名即回写 md（表头 + 分隔行 + 数据行同步补单元格）
+- **表格单元格填写** — 新增列的单元格可直接点击填写，失焦 / 回车自动回写 md 源文件（自动转义 `\|`，行号安全校验）
+- **修改历史（撤销 / 重做 / 重置）** — 工具栏提供 `↶ 撤销`、`↷ 重做`、`重置`：撤销/重做覆盖 checkbox 与表格编辑的全部修改；`重置` 一键取消本次会话所有修改（恢复到打开时的内容，仍可「重做」找回）
+- **启动自动备份** — `serve` 启动时把原始 md 物理备份为同目录 `<原文件名>.tickmark.bak`（防止对原数据的破坏），`重置` 本质上就是把这份备份直接放回去；退出时自动删除备份
 - **Checkbox 回写** — 预览页点击 `- [ ]` / `- [x]`，直接改写磁盘上的 `.md` 源文件
 - **代码高亮** — highlight.js 高亮 + 一键复制按钮
 - **独立 HTML 预览** — `serve` 生成单文件 HTML（CSS/JS 全部内联），IDE 直接打开即可交互
@@ -119,12 +123,13 @@ bin/tickmark.js       CLI 入口（加载 out/cli.js）
 src/cli.ts            子命令解析（render / serve）
 src/serve.ts          HTTP 服务 + 独立 HTML 生成
 src/checkbox.ts       checkbox 回写磁盘逻辑
+src/table.ts          表格新增列 / 单元格回写磁盘逻辑
 src/markdownEngine.ts markdown-it 渲染引擎
 src/page.ts           页面模板
 src/config.ts         IDE 打开命令解析
 src/types/            类型声明
 media/preview.css     预览样式
-media/preview.js      页面交互（回写/Sync/复制）
+media/preview.js      页面交互（回写/Sync/复制/表格编辑）
 examples/             测试样例
 ```
 

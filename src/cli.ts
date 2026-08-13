@@ -101,18 +101,21 @@ async function cmdServe(args: string[]): Promise<void> {
   const noOpen = args.includes('--no-open');
 
   let generatedHtml = '';
+  let backupFile = '';
 
   try {
-    const { server, htmlFile: outHtml } = await startServer(file, {
+    const { server, htmlFile: outHtml, backupFile: bakFile } = await startServer(file, {
       port,
       htmlFile,
     });
     generatedHtml = outHtml;
+    backupFile = bakFile;
 
     console.log('┌──────────────────────────────────────────────');
     console.log('│  TickMark 服务已启动（Ctrl+C 退出）');
     console.log('│');
     console.log(`│  预览文件: ${outHtml}`);
+    console.log(`│  原始备份: ${path.basename(backupFile)}  (重置 = 备份放回)`);
     console.log(`│  点击 checkbox → 自动回写源文件 ${path.basename(file)}`);
     console.log('└──────────────────────────────────────────────');
 
@@ -128,8 +131,11 @@ async function cmdServe(args: string[]): Promise<void> {
       }
     }
 
-    // 退出时删除生成的 HTML（render 产物不受影响）
-    const cleanup = () => removeHtml(generatedHtml);
+    // 退出时删除生成的 HTML 与原始备份（render 产物不受影响）
+    const cleanup = () => {
+      removeHtml(generatedHtml);
+      removeBackup(backupFile);
+    };
     process.on('SIGINT', () => {
       cleanup();
       process.exit(0);
@@ -221,6 +227,19 @@ function removeHtml(htmlFile: string): void {
     }
   } catch (err) {
     console.warn(`删除预览文件失败: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** 删除 serve 生成的原始 MD 备份文件 */
+function removeBackup(backupFile: string): void {
+  if (!backupFile) return;
+  try {
+    if (fs.existsSync(backupFile)) {
+      fs.unlinkSync(backupFile);
+      console.log(`已删除原始备份: ${backupFile}`);
+    }
+  } catch (err) {
+    console.warn(`删除原始备份失败: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

@@ -95,6 +95,20 @@ body {
 }
 
 .tm-btn:hover { border-color: var(--md-checkbox-accent); color: var(--md-checkbox-accent); }
+.tm-btn:disabled { opacity: .4; cursor: default; }
+.tm-btn:disabled:hover { border-color: var(--md-btn-border); color: var(--md-fg); }
+
+/* ---- 工具栏修改历史按钮组（撤销/重做/重置） ---- */
+.tm-hist-group { display: inline-flex; gap: 6px; }
+.tm-hist-group .tm-btn { padding: 4px 10px; white-space: nowrap; }
+
+/* 重置两段式确认态（红色提示，3s 内再点一次执行） */
+.tm-hist-reset.confirming {
+  color: #d1242f;
+  border-color: #d1242f;
+  background: color-mix(in srgb, #d1242f 8%, transparent);
+}
+.tm-hist-reset.confirming:hover { color: #d1242f; border-color: #d1242f; }
 
 /* ---- 内容区 ---- */
 .markdown-body {
@@ -440,6 +454,136 @@ body {
   border-radius: 8px;
 }
 .tm-fpop-empty { color: var(--md-fg-muted, #59636e); padding: 6px 8px 8px; }
+
+/* ---- 表格列编辑：新增列（任意位置）+ 单元格填写回写 ---- */
+.tm-tbl-addcol {
+  margin-left: auto;
+  padding: 3px 12px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: 1px dashed var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tm-tbl-addcol:hover {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+}
+
+/* 表头悬停 + 按钮 */
+.tm-th-add {
+  position: absolute;
+  right: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--md-btn-bg, #f6f8fa);
+  color: var(--md-fg-muted, #59636e);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, background-color .12s, color .12s;
+}
+.markdown-body th:hover .tm-th-add { opacity: 1; }
+.tm-th-add:hover {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: var(--md-bg, #ffffff);
+}
+
+/* 新增列的可编辑单元格 */
+.markdown-body td.tm-edit-cell {
+  min-width: 64px;
+  outline: none;
+  cursor: text;
+}
+.markdown-body td.tm-edit-cell:empty::before {
+  content: '点击填写';
+  color: var(--md-fg-muted, #59636e);
+  font-style: italic;
+  opacity: .6;
+  pointer-events: none;
+}
+.markdown-body td.tm-edit-cell:focus {
+  outline: 2px solid var(--md-checkbox-accent, #0969da);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+.markdown-body td.tm-edit-cell:focus:empty::before { content: ''; }
+
+/* 添加列弹层 */
+.tm-ac-pop {
+  position: absolute;
+  z-index: 310;
+  display: none;
+  min-width: 240px;
+  padding: 8px 10px 10px;
+  background: var(--md-bg, #ffffff);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  font-size: 12px;
+}
+.tm-ac-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.tm-ac-title { font-weight: 600; color: var(--md-fg, #1f2328); }
+.tm-ac-close {
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 14px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-ac-close:hover { color: var(--md-fg, #1f2328); background: var(--md-code-bg, #f6f8fa); }
+.tm-ac-hint {
+  color: var(--md-fg-muted, #59636e);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.tm-ac-name {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tm-ac-name:focus { outline: none; border-color: var(--md-checkbox-accent, #0969da); }
+.tm-ac-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.tm-ac-actions button {
+  padding: 3px 14px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-link, #0969da);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-ac-actions .tm-ac-ok {
+  background: var(--md-checkbox-accent, #0969da);
+  color: #fff;
+  border-color: var(--md-checkbox-accent, #0969da);
+}
+.tm-ac-actions button:hover { opacity: .85; }
 
 /* ---- 图片 / 分割线 ---- */
 .markdown-body img { max-width: 100%; border-radius: 6px; }

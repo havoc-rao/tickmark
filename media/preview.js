@@ -44,6 +44,7 @@
         if (r.status === 200 && r.data.ok) {
           console.log('[tickmark] toggled line', line, '->', r.data.newChar);
           // 成功：保持本地勾选态
+          refreshHistoryButtons();
         } else {
           target.checked = !checked; // 回滚
           showToast(r.data.reason || 'toggle failed (status ' + r.status + ')', true);
@@ -60,35 +61,30 @@
   var syncBtn = document.getElementById('tm-refresh');
   if (syncBtn) {
     syncBtn.addEventListener('click', function () {
-      fetch(api('/api/content'))
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (!data.content) throw new Error('empty content');
-          // 用 fetch 到的最新整页 HTML 里的 .markdown-body 替换现有正文（保留 toolbar）
-          fetch(api('/api/html'))
-            .then(function (r) { return r.text(); })
-            .then(function (pageHtml) {
-              var doc = new DOMParser().parseFromString(pageHtml, 'text/html');
-              var newBody = doc.querySelector('.markdown-body');
-              if (newBody) {
-                var oldBody = document.querySelector('.markdown-body');
-                if (oldBody && oldBody.parentNode) {
-                  oldBody.parentNode.replaceChild(newBody, oldBody);
-                }
-                initTableFilters();
-                initOutline();
-                showToast('已同步最新内容', false);
-              }
-            })
-            .catch(function () {
-              showToast('同步失败', true);
-            });
-        })
-        .catch(function (err) {
-          console.error('[tickmark] sync failed:', err);
-          showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
-        });
+      reRender('已同步最新内容');
     });
+  }
+
+  /** 拉取服务端最新整页 HTML，替换 .markdown-body 并重挂表格过滤器/大纲/历史按钮态 */
+  function reRender(okMsg) {
+    fetch(api('/api/html'))
+      .then(function (r) { return r.text(); })
+      .then(function (pageHtml) {
+        var doc = new DOMParser().parseFromString(pageHtml, 'text/html');
+        var newBody = doc.querySelector('.markdown-body');
+        if (!newBody) throw new Error('no .markdown-body');
+        var oldBody = document.querySelector('.markdown-body');
+        if (oldBody && oldBody.parentNode) {
+          oldBody.parentNode.replaceChild(newBody, oldBody);
+        }
+        initTableFilters();
+        initOutline();
+        refreshHistoryButtons();
+        if (okMsg) showToast(okMsg, false);
+      })
+      .catch(function () {
+        showToast('同步失败', true);
+      });
   }
 
   // ---- 代码块复制按钮 ----
@@ -337,9 +333,12 @@
     clearBtn.textContent = '清除筛选';
     if (!hasActive) clearBtn.style.display = 'none';
     bar.appendChild(clearBtn);
-    sum.textContent = hasActive
-      ? '显示 ' + visible + ' / ' + m.rows.length + ' 行'
-      : m.rows.length + ' 行';
+    var addColBtn = document.createElement('button');
+    addColBtn.type = 'button';
+    addColBtn.className = 'tm-tbl-addcol';
+    addColBtn.textContent = '+ 列';
+    addColBtn.title = '在表格中新增一列（新增列单元格可直接填写并回写 md）';
+    bar.appendChild(addColBtn);
     return bar;
   }
 
@@ -488,7 +487,11 @@
     var headRow = (table.tHead && table.tHead.rows[0]) || null;
     if (!tbody || !headRow || !headRow.cells.length || !tbody.rows.length) return;
     var cols = [];
-    for (var h = 0; h < headRow.cells.length; h++) cols.push(cellText(headRow.cells[h]));
+    for (var h = 0; h < headRow.cells.length; h++) {
+      cols.push(cellText(headRow.cells[h]));
+      headRow.cells[h].setAttribute('data-col', String(h));
+      addThAddBtn(headRow.cells[h], h);
+    }
     markEmptyCells(table);
     var numCols = detectNumCols(table, headRow);
     for (var nc = 0; nc < numCols.length && nc < headRow.cells.length; nc++) {
@@ -529,6 +532,28 @@
       if (act && act.tagName === 'BUTTON') handleAction(act);
       return; // 点击弹层内部不关闭
     }
+    // 表头悬停 + 按钮：在对应列右侧新增一列
+    var thAddEl = closest(t, '.tm-th-add');
+    if (thAddEl) {
+      var wrapA = closest(thAddEl, '.tm-tbl');
+      var tblA = wrapA ? wrapA.querySelector('table') : null;
+      if (tblA) {
+        var thEl = closest(thAddEl, 'th');
+        var ci = thEl ? (parseInt(thEl.getAttribute('data-col'), 10) || 0) + 1 : 0;
+        openAddColPopup(tblA, ci, function () { return thAddEl; }, wrapA);
+        return;
+      }
+    }
+    // 工具栏 + 列按钮：在表格末尾新增一列
+    var addColBtnEl = closest(t, '.tm-tbl-addcol');
+    if (addColBtnEl) {
+      var wrapB = closest(addColBtnEl, '.tm-tbl');
+      var tblB = wrapB ? wrapB.querySelector('table') : null;
+      if (tblB && tblB.__tmModel) {
+        openAddColPopup(tblB, tblB.__tmModel.cols.length, function () { return addColBtnEl; }, wrapB);
+        return;
+      }
+    }
     var colBtn = closest(t, '.tm-colfilter');
     if (colBtn) {
       var wrapT = closest(colBtn, '.tm-tbl');
@@ -553,6 +578,7 @@
     if (closest(t, '#tm-outline, #tm-outline-wrap')) return; // 大纲内部点击不关闭
     closePopup();
     closeOutline();
+    cancelResetConfirm(); // 点击页面其他位置 → 取消重置确认态
   });
 
   document.addEventListener('change', function (e) {
@@ -594,10 +620,315 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { closePopup(); closeOutline(); }
+    if (e.key === 'Escape') {
+      closePopup(); closeOutline(); closeAddColPopup(); cancelResetConfirm();
+    }
   });
 
   initTableFilters();
+
+  // ---- 表格列编辑：新增列（任意位置）+ 新增列单元格直接填写回写 ----
+  var addColPopover = null;
+  var addColModel = null; // { table, colIndex }
+
+  /** 表头悬停 + 按钮（在该列右侧插入新列） */
+  function addThAddBtn(th, colIndex) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tm-th-add';
+    btn.title = '在右侧添加列';
+    btn.textContent = '+';
+    btn.setAttribute('data-col', String(colIndex));
+    th.appendChild(btn);
+  }
+
+  function getAddColPopup() {
+    if (!addColPopover) {
+      var pop = document.createElement('div');
+      pop.className = 'tm-ac-pop';
+      pop.id = 'tm-ac-pop';
+      pop.style.display = 'none';
+      pop.innerHTML =
+        '<div class="tm-ac-head">' +
+        '<span class="tm-ac-title">添加列</span>' +
+        '<button type="button" class="tm-ac-close" title="取消">×</button>' +
+        '</div>' +
+        '<div class="tm-ac-hint"></div>' +
+        '<input class="tm-ac-name" type="text" placeholder="列名，回车确认"/>' +
+        '<div class="tm-ac-actions">' +
+        '<button type="button" class="tm-ac-cancel">取消</button>' +
+        '<button type="button" class="tm-ac-ok">确定</button>' +
+        '</div>';
+      addColPopover = tmPopover({ content: pop, maxWidth: 300, maxHeight: 220, gap: 6 });
+
+      var nameInput = pop.querySelector('.tm-ac-name');
+      nameInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); confirmAddCol(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeAddColPopup(); }
+      });
+      nameInput.addEventListener('click', function (e) { e.stopPropagation(); });
+      pop.querySelector('.tm-ac-ok').addEventListener('click', confirmAddCol);
+      pop.querySelector('.tm-ac-cancel').addEventListener('click', closeAddColPopup);
+      pop.querySelector('.tm-ac-close').addEventListener('click', closeAddColPopup);
+    }
+    return addColPopover.el;
+  }
+
+  function openAddColPopup(table, colIndex, anchorFn, wrap) {
+    addColModel = { table: table, colIndex: colIndex };
+    var pop = getAddColPopup();
+    pop.querySelector('.tm-ac-name').value = '';
+    var hint = pop.querySelector('.tm-ac-hint');
+    var model = table.__tmModel;
+    var total = model ? model.cols.length : 0;
+    hint.textContent = colIndex >= total
+      ? '将在表格末尾添加新列'
+      : '将在「' + ((model && model.cols[colIndex]) || '(空)') + '」之前添加新列';
+    addColPopover.show(anchorFn, wrap);
+    pop.querySelector('.tm-ac-name').focus();
+  }
+
+  function closeAddColPopup() {
+    if (addColPopover) addColPopover.hide();
+    addColModel = null;
+  }
+
+  function confirmAddCol() {
+    var m = addColModel;
+    if (!m || !m.table || !m.table.isConnected) { closeAddColPopup(); return; }
+    var pop = getAddColPopup();
+    var name = (pop.querySelector('.tm-ac-name').value || '').trim();
+    var headerLine = parseInt(m.table.getAttribute('data-source-line'), 10) || 0;
+    fetch(api('/api/table/add-column'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line: headerLine, colIndex: m.colIndex, name: name }),
+    })
+      .then(function (res) { return res.json().then(function (d) { return { status: res.status, data: d }; }); })
+      .then(function (r) {
+        if (r.status === 200 && r.data.ok) {
+          localInsertColumn(m.table, r.data.colIndex, r.data.name);
+          var model = m.table.__tmModel;
+          if (model) {
+            // 已生效的过滤列在插入位置及之后要整体右移一位
+            var newSel = {};
+            for (var k in model.sel) {
+              if (!model.sel.hasOwnProperty(k)) continue;
+              var kk = parseInt(k, 10);
+              newSel[kk >= r.data.colIndex ? kk + 1 : kk] = model.sel[k];
+            }
+            model.sel = newSel;
+            model.cols.splice(r.data.colIndex, 0, r.data.name);
+            mountFilterBar(model);
+          }
+          closeAddColPopup();
+          showToast('已添加列「' + r.data.name + '」', false);
+          refreshHistoryButtons();
+        } else {
+          showToast(r.data.reason || '添加列失败 (status ' + r.status + ')', true);
+        }
+      })
+      .catch(function (err) {
+        console.error('[tickmark] add column failed:', err);
+        showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
+      });
+  }
+
+  /** 本地 DOM 同步插入列：th（带 + 按钮）+ 每行 contenteditable td */
+  function localInsertColumn(table, idx, name) {
+    var headRow = table.tHead && table.tHead.rows[0];
+    if (!headRow) return;
+    var th = document.createElement('th');
+    th.textContent = name;
+    addThAddBtn(th, idx);
+    if (idx >= headRow.cells.length) headRow.appendChild(th);
+    else headRow.insertBefore(th, headRow.cells[idx]);
+    for (var h = 0; h < headRow.cells.length; h++) {
+      headRow.cells[h].setAttribute('data-col', String(h));
+      var b = headRow.cells[h].querySelector('.tm-th-add');
+      if (b) b.setAttribute('data-col', String(h));
+    }
+    var tbody = table.tBodies[0];
+    if (!tbody) return;
+    for (var i = 0; i < tbody.rows.length; i++) {
+      var td = document.createElement('td');
+      td.className = 'tm-edit-cell';
+      td.setAttribute('contenteditable', 'true');
+      td.setAttribute('data-col', String(idx));
+      td.title = '点击填写，自动回写 md';
+      var row = tbody.rows[i];
+      if (idx >= row.cells.length) row.appendChild(td);
+      else row.insertBefore(td, row.cells[idx]);
+    }
+  }
+
+  /** 可编辑单元格提交：blur / Enter 时回写该列值 */
+  function submitCellEdit(td, value, oldValue) {
+    var tr = td.parentNode;
+    var line = tr && tr.getAttribute ? (parseInt(tr.getAttribute('data-source-line'), 10) || 0) : 0;
+    var col = parseInt(td.getAttribute('data-col'), 10) || 0;
+    fetch(api('/api/table/set-cell'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line: line, colIndex: col, value: value }),
+    })
+      .then(function (res) { return res.json().then(function (d) { return { status: res.status, data: d }; }); })
+      .then(function (r) {
+        if (r.status === 200 && r.data.ok) {
+          td.textContent = value;
+          console.log('[tickmark] cell updated', line, col, '->', value);
+          refreshHistoryButtons();
+        } else {
+          td.textContent = oldValue;
+          showToast(r.data.reason || '写入失败 (status ' + r.status + ')', true);
+        }
+      })
+      .catch(function (err) {
+        td.textContent = oldValue;
+        console.error('[tickmark] set cell failed:', err);
+        showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
+      });
+  }
+
+  // 记录编辑前快照（回滚用）
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('tm-edit-cell')) {
+      t.__tmOld = t.textContent || '';
+    }
+  }, true);
+
+  // 失焦提交：值有变化才回写
+  document.addEventListener('focusout', function (e) {
+    var t = e.target;
+    if (!t || !t.classList || !t.classList.contains('tm-edit-cell')) return;
+    var val = (t.textContent || '').replace(/\s*\n\s*/g, ' ').trim();
+    var old = t.__tmOld !== undefined ? t.__tmOld : '';
+    delete t.__tmOld;
+    if (val === old) return;
+    submitCellEdit(t, val, old);
+  }, true);
+
+  // Enter 提交（contenteditable 内 Enter 默认换行 → 改为提交）
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('tm-edit-cell') && e.key === 'Enter') {
+      e.preventDefault();
+      t.blur();
+    }
+  });
+
+  // ---- 修改历史：撤销 / 重做 / 取消本次所有修改 ----
+  var historyBtns = null; // { undo, redo, reset }
+
+  function ensureHistoryButtons() {
+    // 幂等：以 DOM 为准，Sync/撤销后 toolbar 未重建，复用既有按钮
+    if (historyBtns && historyBtns.undo.isConnected) return historyBtns;
+    var toolbar = document.querySelector('.tm-toolbar');
+    if (!toolbar) return null;
+    var refresh = document.getElementById('tm-refresh');
+    var group = document.createElement('span');
+    group.className = 'tm-hist-group';
+    group.innerHTML =
+      '<button type="button" class="tm-btn tm-hist-undo" title="撤销上一次修改">↶ 撤销</button>' +
+      '<button type="button" class="tm-btn tm-hist-redo" title="重做已撤销的修改">↷ 重做</button>' +
+      '<button type="button" class="tm-btn tm-hist-reset" title="取消本次所有修改，恢复到打开时的内容">重置</button>';
+    var undo = group.querySelector('.tm-hist-undo');
+    var redo = group.querySelector('.tm-hist-redo');
+    var reset = group.querySelector('.tm-hist-reset');
+    undo.addEventListener('click', historyAction('undo'));
+    redo.addEventListener('click', historyAction('redo'));
+    reset.addEventListener('click', resetClickHandler);
+    if (refresh) toolbar.insertBefore(group, refresh);
+    else toolbar.appendChild(group);
+    historyBtns = { undo: undo, redo: redo, reset: reset };
+    return historyBtns;
+  }
+
+  /**
+   * 重置按钮点击：两段式确认（不依赖 window.confirm，webview sandbox 里被禁）。
+   * 第一次点击 → 按钮变红显示「再点一次确认」，3s 内第二次点击才执行。
+   */
+  function resetClickHandler(e) {
+    e.stopPropagation();
+    var btn = historyBtns && historyBtns.reset;
+    if (!btn || btn.disabled) return;
+    if (btn.classList.contains('confirming')) {
+      btn.classList.remove('confirming');
+      btn.textContent = '重置';
+      clearTimeout(btn.__tmConfirmTimer);
+      doHistory('reset');
+    } else {
+      btn.classList.add('confirming');
+      btn.textContent = '再点一次确认';
+      clearTimeout(btn.__tmConfirmTimer);
+      btn.__tmConfirmTimer = setTimeout(function () {
+        btn.classList.remove('confirming');
+        btn.textContent = '重置';
+      }, 5000);
+    }
+  }
+
+  /** 取消重置确认态（点击页面其他位置 / Escape 时调用） */
+  function cancelResetConfirm() {
+    var btn = historyBtns && historyBtns.reset;
+    if (btn && btn.classList.contains('confirming')) {
+      btn.classList.remove('confirming');
+      btn.textContent = '重置';
+      clearTimeout(btn.__tmConfirmTimer);
+    }
+  }
+
+  /** 撤销 / 重做 / 重置 操作（成功后整体重渲染） */
+  function historyAction(act) {
+    return function (e) {
+      e.stopPropagation();
+      doHistory(act);
+    };
+  }
+
+  function doHistory(act) {
+    fetch(api('/api/history/' + act), { method: 'POST' })
+        .then(function (res) { return res.json().then(function (d) { return { status: res.status, data: d }; }); })
+        .then(function (r) {
+          if (r.status === 200 && r.data.ok) {
+            var msg = act === 'reset' ? '已取消本次所有修改' : (act === 'undo' ? '已撤销' : '已重做');
+            reRender(msg);
+          } else {
+            showToast(r.data.reason || (act + ' failed (status ' + r.status + ')'), true);
+          }
+        })
+        .catch(function (err) {
+          console.error('[tickmark] history ' + act + ' failed:', err);
+          showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
+        });
+  }
+
+  /** 从服务端拉取历史状态，更新三个按钮可用态 */
+  function refreshHistoryButtons() {
+    if (!historyBtns || !historyBtns.undo.isConnected) ensureHistoryButtons();
+    if (!historyBtns) return;
+    fetch(api('/api/history/status'))
+      .then(function (res) { return res.json(); })
+      .then(function (s) {
+        var resetBtn = historyBtns.reset;
+        // 状态刷新时重置按钮恢复正常文本（若正处于「再点一次确认」态）
+        if (resetBtn.classList.contains('confirming')) {
+          resetBtn.classList.remove('confirming');
+          resetBtn.textContent = '重置';
+          clearTimeout(resetBtn.__tmConfirmTimer);
+        }
+        historyBtns.undo.disabled = !s.canUndo;
+        historyBtns.redo.disabled = !s.canRedo;
+        resetBtn.disabled = !s.dirty;
+      })
+      .catch(function () { /* 服务未就绪时保持可用态，点击会给出明确错误 */ });
+  }
+
+  function initHistoryButtons() {
+    ensureHistoryButtons();
+    refreshHistoryButtons();
+  }
 
   // ---- 大纲（TOC）：标题树 + 点击跳转 + 滚动高亮 ----
   var TOC_OFFSET = 56;          // sticky 工具栏高度 + 余量
@@ -613,6 +944,7 @@
   // 必须在上述 var 初始化之后调用：var 的初始化赋值在后，
   // 若提前调用会把已设置的 tocPanel/tocToggle 引用重置为 null → 初次点击无反应
   initOutline();
+  initHistoryButtons();
 
   function ensureOutlineToggle() {
     // 幂等：以 DOM 为准。若 DOM 已存在（残留 / 重复初始化）直接复用，
@@ -643,9 +975,8 @@
     wrap.appendChild(btn);
     var toolbar = document.querySelector('.tm-toolbar');
     if (toolbar) {
-      var refresh = document.getElementById('tm-refresh');
-      if (refresh) toolbar.insertBefore(wrap, refresh);
-      else toolbar.appendChild(wrap);
+      // 大纲按钮固定放工具栏最右侧（Sync 之后）
+      toolbar.appendChild(wrap);
     } else {
       btn.classList.add('tm-outline-fab');
       document.body.appendChild(btn);
