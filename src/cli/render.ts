@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MarkdownEngine } from '../markdownEngine';
 import { renderPage } from '../page';
+import { resolveLang } from '../config';
 import { cliName } from './name';
 
 /** render 子命令：静态转换 */
@@ -22,6 +23,7 @@ export function cmdRender(args: string[]): void {
   const page = renderPage({
     title: path.basename(file),
     bodyHtml: html,
+    lang: resolveLang(),
   });
 
   const outFile = out || file.replace(/\.(md|markdown|mdx)$/i, '') + '.html';

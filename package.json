@@ -27,7 +27,8 @@
   "scripts": {
     "compile": "tsc -p ./",
     "build": "npm run compile",
-    "release": "sh scripts/release.sh",
+    "build:media": "node scripts/build-media.js",
+    "release": "npm run build:media && sh scripts/release.sh",
     "builink": "npm run build && npm link"
   },
   "dependencies": {

@@ -5,6 +5,7 @@ import { MarkdownEngine } from './markdownEngine';
 import { toggleCheckboxInFile } from './checkbox';
 import { addColumnInFile, deleteColumnInFile, moveColumnInFile, setCellInFile } from './table';
 import { renderPage, renderStandalonePage } from './page';
+import { resolveLang } from './config';
 
 export interface ServeResult {
   server: http.Server;
@@ -41,6 +42,8 @@ export function startServer(
   const absPath = path.resolve(filePath);
   const mediaDir = path.join(__dirname, '..', 'media');
   const host = opts.host || '127.0.0.1';
+  // 界面语言来自 ~/.config/tickmark/config.json（timd config set lang <zh-CN|en-US>）
+  const uiLang = resolveLang();
 
   // 启动时对原始 MD 的磁盘备份（防止对原数据的破坏；重置 = 把备份放回去）
   const backupPath = path.join(path.dirname(absPath), path.basename(absPath) + '.tickmark.bak');
@@ -276,7 +279,7 @@ export function startServer(
       if (url.pathname === '/' || url.pathname === '/index.html') {
         const content = fs.readFileSync(absPath, 'utf8');
         const { html } = engine.render(content);
-        const page = renderPage({ title: path.basename(absPath), bodyHtml: html });
+        const page = renderPage({ title: path.basename(absPath), bodyHtml: html, lang: uiLang });
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(page);
         return;
@@ -286,7 +289,7 @@ export function startServer(
       if (url.pathname === '/api/html' && req.method === 'GET') {
         const content = fs.readFileSync(absPath, 'utf8');
         const { html } = engine.render(content);
-        const page = renderPage({ title: path.basename(absPath), bodyHtml: html });
+        const page = renderPage({ title: path.basename(absPath), bodyHtml: html, lang: uiLang });
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(page);
         return;
@@ -315,6 +318,7 @@ export function startServer(
           engine,
           apiBase: `http://${host}:${port}`,
           mediaDir,
+          lang: uiLang,
         });
       }
 
@@ -330,8 +334,9 @@ function writeStandaloneHtml(params: {
   engine: MarkdownEngine;
   apiBase: string;
   mediaDir: string;
+  lang?: string;
 }): string {
-  const { filePath, engine, apiBase, mediaDir } = params;
+  const { filePath, engine, apiBase, mediaDir, lang } = params;
 
   const content = fs.readFileSync(filePath, 'utf8');
   const { html } = engine.render(content);
@@ -353,6 +358,7 @@ function writeStandaloneHtml(params: {
     cssText,
     jsText,
     apiBase,
+    lang,
   });
 
   fs.writeFileSync(outPath, page, 'utf8');

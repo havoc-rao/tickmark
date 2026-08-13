@@ -50,6 +50,50 @@ export function rcFilePath(): string {
   return path.join(os.homedir(), '.config', 'tickmark', 'config.json');
 }
 
+/** 支持的语言（预览页 i18n） */
+export const KNOWN_LANGS = ['zh-CN', 'en-US'] as const;
+
+/** 读取配置的语言偏好（zh-CN / en-US），非法/未设置时回退 zh-CN */
+export function resolveLang(): string {
+  const rc = readRc();
+  const v = rc.lang;
+  return typeof v === 'string' && (KNOWN_LANGS as readonly string[]).includes(v) ? v : 'zh-CN';
+}
+
+/** 写语言偏好到 ~/.config/tickmark/config.json（保留其它字段） */
+export function setLang(lang: string): { rcPath: string; lang: string } {
+  const v = lang.trim();
+  if (!(KNOWN_LANGS as readonly string[]).includes(v)) {
+    throw new Error(`未知语言: ${v}（可用: ${KNOWN_LANGS.join(' / ')}）`);
+  }
+  const rc = readRc();
+  rc.lang = v;
+  const rcPath = rcFilePath();
+  fs.mkdirSync(path.dirname(rcPath), { recursive: true });
+  fs.writeFileSync(rcPath, JSON.stringify(rc, null, 2) + '\n', 'utf8');
+  return { rcPath, lang: v };
+}
+
+/** 读取全部配置（供 `timd config` 查看；会尝试兼容旧配置路径） */
+export function readAllConfig(): Record<string, unknown> {
+  return readRc();
+}
+
+/** 读单个配置键；未设置返回 undefined */
+export function readConfigKey(key: string): unknown {
+  return readRc()[key];
+}
+
+/** 写任意配置键到 config.json（保留其它字段）；返回写入后的完整配置 */
+export function setConfigKey(key: string, value: string): { rcPath: string; key: string; value: string } {
+  const rc = readRc();
+  rc[key] = value.trim();
+  const rcPath = rcFilePath();
+  fs.mkdirSync(path.dirname(rcPath), { recursive: true });
+  fs.writeFileSync(rcPath, JSON.stringify(rc, null, 2) + '\n', 'utf8');
+  return { rcPath, key, value: value.trim() };
+}
+
 /** 旧版配置路径（迁移前）：~/.tickmarkrc.json */
 const LEGACY_RC_PATH = path.join(os.homedir(), '.tickmarkrc.json');
 

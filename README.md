@@ -11,11 +11,12 @@
 - **表格列拖拽换列** — 工具栏点「✎ 编辑」进入编辑模式：表头显示拖拽手柄 `⋮⋮`，拖到目标列位置（左/右）即换列并回写 md；过滤选中状态、过滤工具栏同步跟随
 - **修改历史（撤销 / 重做 / 重置）** — 工具栏提供 `↶ 撤销`、`↷ 重做`、`重置`：撤销/重做覆盖 checkbox 与表格编辑的全部修改；`重置` 一键取消本次会话所有修改（恢复到打开时的内容，仍可「重做」找回）
 - **启动自动备份** — `serve` 启动时把原始 md 物理备份为同目录 `<原文件名>.tickmark.bak`（防止对原数据的破坏），`重置` 本质上就是把这份备份直接放回去；退出时自动删除备份
-- **主题切换** — 工具栏「主题」按钮：外观（浅色 / 深色 / 跟随系统）与强调色（蓝 / 绿 / 紫 / 橙 / 玫红）独立切换，选择持久化到本地（`localStorage`），下次打开自动恢复
+- **主题切换** — 工具栏「主题」按钮：外观（浅色 / 深色 / 跟随系统）、强调色（蓝 / 绿 / 紫 / 橙 / 玫红）、**语言**（中文 / English）独立切换，选择持久化到本地（`localStorage`），下次打开自动恢复
 - **Checkbox 回写** — 预览页点击 `- [ ]` / `- [x]`，直接改写磁盘上的 `.md` 源文件
 - **代码高亮** — highlight.js 高亮 + 一键复制按钮
 - **独立 HTML 预览** — `serve` 生成单文件 HTML（CSS/JS 全部内联），IDE 直接打开即可交互
 - **实时同步** — Sync 按钮重新拉取源文件渲染，配合外部编辑
+- **i18n 基础 UI** — 中文（默认）/ English，预览页所有按钮 / 提示 / Toast 可实时切换；切换无需刷新页面，菜单、表格过滤栏、添加列弹层（含「插入位置」自定义下拉）文案一并更新
 
 ## 安装
 
@@ -100,21 +101,35 @@ timd render README.md --out readme.html
 timd update --check                   # 检查是否有新版本
 ```
 
-## IDE 打开命令配置
+## 配置管理（`tickmark config`）
 
-用 `tickmark ide` 可以自选预览用的 IDE（`code` / `buddycn` / `cursor` / `vim` 等，支持探测本机安装情况）：
+IDE 打开命令与界面语言本质都是写入 `~/.config/tickmark/config.json` 的配置项，统一用 `tickmark config` 管理：
 
 ```bash
-tickmark ide                 # 列出本机已安装的（预设）IDE，标记当前默认
-tickmark ide list            # 同上
-tickmark ide set cursor      # 设置默认用 Cursor 打开（写入 ~/.config/tickmark/config.json）
+tickmark config                        # 查看当前配置（IDE / 语言 / 已存配置项）
+tickmark config list                   # 同上
+tickmark config set ide cursor         # 设置默认用 Cursor 打开
+tickmark config set lang en-US         # 预览界面切到英文（zh-CN / en-US）
+tickmark config get lang               # 读取单个配置（未设置显示 (未设置)）
+tickmark config unset openCommand      # 删除某个配置项，恢复默认
 ```
 
-打开命令解析优先级（高 → 低）：
+`tickmark ide` 为兼容旧命令，等价于 `tickmark config set ide` / `tickmark config`（列 IDE）。
+
+### 配置项
+
+| key | 说明 | 示例值 |
+|---|---|---|
+| `openCommand` / `ide` | 预览用 IDE 打开命令（支持数组形式 `["code", "-r"]`） | `code`、`buddycn`、`"code -r"` |
+| `lang` / `language` | 预览页界面语言（i18n，zh-CN 默认） | `zh-CN`、`en-US` |
+
+`config set lang` 写入后，重新 `tickmark serve` / `render` 生成的预览页即按该语言打开（CLI 配置优先于页面内切换）；页面内主题菜单也能临时切换语言。
+
+### IDE 打开命令解析优先级（高 → 低）
 
 1. 单次指定：`tickmark serve x.md --ide code`（也支持带参，如 `--ide "code -r"`）
 2. 环境变量：`export TICKMARK_OPEN_CMD="buddycn"`（或 `"code -r"` 等带参命令）
-3. 配置文件 `~/.config/tickmark/config.json`（`tickmark ide set` 写入）：
+3. 配置文件 `~/.config/tickmark/config.json`（`tickmark config set ide` 写入）：
    ```json
    { "openCommand": "buddycn" }
    ```
@@ -124,7 +139,7 @@ tickmark ide set cursor      # 设置默认用 Cursor 打开（写入 ~/.config/
    ```
 4. 默认按序探测预设 IDE `buddycn` → `code` → `cursor` → …，找不到则提示手动打开
 
-预设 IDE 见 `tickmark ide` 输出（含 macOS `/Applications` 应用探测）；`--ide` 指定的命令不存在时自动回退到默认配置。
+预设 IDE 见 `tickmark config` 输出（含 macOS `/Applications` 应用探测）；`--ide` 指定的命令不存在时自动回退到默认配置。
 
 ## 测试样例
 
@@ -155,10 +170,11 @@ timd serve examples/test-checkbox-table.md
 
 ```
 bin/tickmark.js       CLI 入口（加载 out/cli.js）
-src/cli.ts            子命令分发器（render / serve / ide / update）
+src/cli.ts            子命令分发器（render / serve / config / ide / update）
 src/cli/serve.ts      serve 子命令（含 server 别名，HTTP 服务 + 独立 HTML 生成）
 src/cli/render.ts     render 子命令（静态渲染）
-src/cli/ide.ts        ide 子命令（查看/设置默认 IDE）
+src/cli/config.ts     config 子命令（统一管理 IDE / 语言等配置）
+src/cli/ide.ts        ide 子命令（兼容旧命令，委托 config）
 src/cli/update.ts     update 子命令（GitHub 自动更新）
 src/cli/version.ts    版本读取与语义化比较（包根定位）
 src/serve.ts          HTTP 服务 + 独立 HTML 生成
@@ -166,10 +182,15 @@ src/checkbox.ts       checkbox 回写磁盘逻辑
 src/table.ts          表格新增列 / 单元格回写磁盘逻辑
 src/markdownEngine.ts markdown-it 渲染引擎
 src/page.ts           页面模板
-src/config.ts         IDE 打开命令解析
+src/config.ts         配置文件读写（IDE 打开命令 / 语言，~/.config/tickmark/config.json）
 src/types/            类型声明
 media/preview.css     预览样式
-media/preview.js      页面交互（回写/Sync/复制/表格编辑）
+media/preview.js      页面交互（构建产物，由 media/src 合并生成）
+media/src/utils.js    预览页通用工具（api/closest/tmPopover/主题存储等）
+media/src/i18n.js     国际化模块（zh-CN / en-US 字典 + t()/setLang/subscribe）
+media/src/templates.js HTML 模板常量（过滤弹层/新增列/历史/大纲/主题）
+media/src/preview.js  页面交互源码（回写/Sync/复制/表格编辑/自定义下拉/语言切换）
+scripts/build-media.js 按 utils → i18n → templates → preview 合并为 media/preview.js（npm run build:media）
 examples/             测试样例
 ```
 
