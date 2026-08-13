@@ -576,8 +576,10 @@
       return;
     }
     if (closest(t, '#tm-outline, #tm-outline-wrap')) return; // 大纲内部点击不关闭
+    if (closest(t, '#tm-theme-pop, #tm-theme-wrap')) return; // 主题菜单内部点击不关闭
     closePopup();
     closeOutline();
+    closeThemePop();
     cancelResetConfirm(); // 点击页面其他位置 → 取消重置确认态
   });
 
@@ -621,7 +623,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
-      closePopup(); closeOutline(); closeAddColPopup(); cancelResetConfirm();
+      closePopup(); closeOutline(); closeAddColPopup(); closeThemePop(); cancelResetConfirm();
     }
   });
 
@@ -1216,6 +1218,176 @@
     if (tocRaf) return;
     tocRaf = requestAnimationFrame(function () { tocRaf = 0; updateActiveHeading(); });
   }
+
+  // ---- 主题切换：外观（浅色 / 深色 / 跟随系统）+ 强调色 ----
+  var THEME_STORAGE_KEY = 'tickmark.theme';
+  var ACCENT_STORAGE_KEY = 'tickmark.accent';
+  var THEME_PRESETS = { light: '浅色', dark: '深色', system: '跟随系统' };
+  var ACCENT_PRESETS = [
+    { id: 'blue', label: '蓝', color: '#0969da' },
+    { id: 'green', label: '绿', color: '#1a7f37' },
+    { id: 'purple', label: '紫', color: '#8250df' },
+    { id: 'orange', label: '橙', color: '#bc4c00' },
+    { id: 'rose', label: '玫红', color: '#cf222e' },
+  ];
+  var themeWrap = null;
+  var themeToggle = null;
+  var themePop = null;
+
+  /** 读取本地偏好；webview sandbox 下 localStorage 可能不可用 → 返回默认值 */
+  function getStored(key, fallback) {
+    try {
+      var v = window.localStorage.getItem(key);
+      return v === null || v === '' ? fallback : v;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function setStored(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+  }
+
+  function themeSystemDark() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+
+  /** 将主题偏好映射为实际 data-theme（dark 布尔决定配色） */
+  function applyTheme(theme) {
+    var dark = theme === 'dark' || (theme === 'system' && themeSystemDark());
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    // 保留偏好值（light/dark/system）供菜单高亮
+    document.documentElement.setAttribute('data-theme-pref', theme);
+  }
+
+  function applyAccent(accent) {
+    document.documentElement.setAttribute('data-accent', accent || 'blue');
+  }
+
+  /** 构建主题菜单（幂等：复用已挂载节点，避免 Sync 后重复初始化） */
+  function buildThemePop() {
+    var existing = document.getElementById('tm-theme-pop');
+    if (existing) { themePop = existing; return themePop; }
+    var pop = document.createElement('div');
+    pop.id = 'tm-theme-pop';
+    pop.className = 'tm-theme-pop';
+    pop.setAttribute('aria-label', '主题设置');
+    pop.innerHTML =
+      '<div class="tm-theme-head">' +
+      '<span class="tm-theme-title">主题</span>' +
+      '<button type="button" class="tm-theme-close" title="收起" aria-label="收起主题菜单">×</button>' +
+      '</div>' +
+      '<div class="tm-theme-sec">外观</div>' +
+      '<div class="tm-theme-options" data-group="theme"></div>' +
+      '<div class="tm-theme-sec">强调色</div>' +
+      '<div class="tm-theme-options" data-group="accent"></div>';
+
+    var themeBox = pop.querySelector('[data-group="theme"]');
+    for (var id in THEME_PRESETS) {
+      if (!THEME_PRESETS.hasOwnProperty(id)) continue;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tm-theme-opt';
+      b.setAttribute('data-theme-opt', id);
+      b.textContent = THEME_PRESETS[id];
+      themeBox.appendChild(b);
+    }
+
+    var accentBox = pop.querySelector('[data-group="accent"]');
+    for (var i = 0; i < ACCENT_PRESETS.length; i++) {
+      var a = ACCENT_PRESETS[i];
+      var ab = document.createElement('button');
+      ab.type = 'button';
+      ab.className = 'tm-theme-opt tm-theme-accent';
+      ab.setAttribute('data-accent-opt', a.id);
+      ab.innerHTML = '<span class="tm-dot" style="background:' + a.color + '"></span>' + a.label;
+      accentBox.appendChild(ab);
+    }
+
+    if (themeWrap && themeWrap.parentNode) themeWrap.appendChild(pop);
+    else document.body.appendChild(pop);
+
+    pop.querySelector('.tm-theme-close').addEventListener('click', function (e) {
+      e.stopPropagation();
+      setThemeOpen(false);
+    });
+    // 选项点击（事件委托）：选中即应用并持久化，菜单保持打开便于连续调整
+    pop.addEventListener('click', function (e) {
+      var t = e.target;
+      var th = t.closest ? t.closest('[data-theme-opt]') : null;
+      if (th) {
+        var v = th.getAttribute('data-theme-opt');
+        setStored(THEME_STORAGE_KEY, v);
+        applyTheme(v);
+        syncThemeMenu();
+        return;
+      }
+      var ac = t.closest ? t.closest('[data-accent-opt]') : null;
+      if (ac) {
+        var av = ac.getAttribute('data-accent-opt');
+        setStored(ACCENT_STORAGE_KEY, av);
+        applyAccent(av);
+        syncThemeMenu();
+      }
+    });
+    themePop = pop;
+    return pop;
+  }
+
+  function setThemeOpen(open) {
+    var pop = buildThemePop();
+    pop.classList.toggle('open', open);
+    if (themeToggle) themeToggle.classList.toggle('active', open);
+  }
+
+  function closeThemePop() { setThemeOpen(false); }
+
+  /** 根据当前偏好刷新菜单选中高亮 */
+  function syncThemeMenu() {
+    var pop = buildThemePop();
+    if (!pop) return;
+    var theme = getStored(THEME_STORAGE_KEY, 'system');
+    var accent = getStored(ACCENT_STORAGE_KEY, 'blue');
+    var opts = pop.querySelectorAll('[data-theme-opt]');
+    for (var i = 0; i < opts.length; i++) {
+      opts[i].classList.toggle('active', opts[i].getAttribute('data-theme-opt') === theme);
+    }
+    var accs = pop.querySelectorAll('[data-accent-opt]');
+    for (var j = 0; j < accs.length; j++) {
+      accs[j].classList.toggle('active', accs[j].getAttribute('data-accent-opt') === accent);
+    }
+  }
+
+  /** 初始化：应用持久化偏好 + 绑定按钮 + 监听系统主题变化（仅 system 模式生效） */
+  function initTheme() {
+    var theme = getStored(THEME_STORAGE_KEY, 'system');
+    var accent = getStored(ACCENT_STORAGE_KEY, 'blue');
+    applyTheme(theme);
+    applyAccent(accent);
+
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var onChange = function () {
+        if (getStored(THEME_STORAGE_KEY, 'system') === 'system') applyTheme('system');
+      };
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
+
+    themeWrap = document.getElementById('tm-theme-wrap');
+    themeToggle = themeWrap ? themeWrap.querySelector('#tm-theme-toggle') : null;
+    if (themeToggle) {
+      themeToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setThemeOpen(!(themePop && themePop.classList.contains('open')));
+      });
+    }
+    buildThemePop();
+    syncThemeMenu();
+  }
+
+  // 必须在上述 var 初始化之后调用（var 提升后值为 undefined，提前调用会抛错）
+  initTheme();
 
   // ---- Toast 提示 ----
   function showToast(msg, isError) {

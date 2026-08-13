@@ -27,6 +27,9 @@ export function renderPage(opts: PageOptions): string {
     <span class="tm-title">TickMark</span>
     <span class="tm-file">${escapeHtml(title)}</span>
     <button id="tm-refresh" class="tm-btn" title="重新渲染">Refresh</button>
+    <div id="tm-theme-wrap" class="tm-theme-wrap">
+      <button id="tm-theme-toggle" class="tm-btn" type="button" title="切换主题与强调色"><span class="tm-theme-ic">◐</span> 主题</button>
+    </div>
   </header>
   <main class="markdown-body">
     ${bodyHtml}
@@ -56,6 +59,9 @@ ${cssText}
     <span class="tm-title">TickMark</span>
     <span class="tm-file">${escapeHtml(title)}</span>
     <button id="tm-refresh" class="tm-btn" title="拉取最新 md 并重新渲染">Sync</button>
+    <div id="tm-theme-wrap" class="tm-theme-wrap">
+      <button id="tm-theme-toggle" class="tm-btn" type="button" title="切换主题与强调色"><span class="tm-theme-ic">◐</span> 主题</button>
+    </div>
   </header>
   <main class="markdown-body">
     ${bodyHtml}

@@ -2,47 +2,62 @@
    TickMark CLI — Webview Styles
    ========================================================================= */
 
+/*
+ * 主题变量：
+ * - 外观（浅色 / 深色）：html[data-theme="dark"] 显式覆盖（不再依赖 prefers-color-scheme 媒体查询，
+ *   由 preview.js 统一管理：system 模式下才监听系统偏好并写入 data-theme）
+ * - 强调色：html[data-accent] 覆盖 --md-accent，link / checkbox 等引用它的组件随之变色
+ */
 :root {
+  --md-accent: #0969da; /* 主题强调色（默认蓝） */
   --md-bg: #ffffff;
   --md-fg: #1f2328;
   --md-fg-muted: #59636e;
   --md-border: #d1d9e0;
   --md-code-bg: #f6f8fa;
   --md-code-fg: #1f2328;
-  --md-link: #0969da;
+  --md-link: var(--md-accent);
   --md-quote-border: #d1d9e0;
   --md-quote-bg: #f6f8fa;
   --md-table-head-bg: #f6f8fa;
   --md-table-border: #d1d9e0;
   --md-table-stripe: #fafbfc;
   --md-hr: #d1d9e0;
-  --md-checkbox-accent: #0969da;
+  --md-checkbox-accent: var(--md-accent);
   --md-btn-bg: #f6f8fa;
   --md-btn-border: #d1d9e0;
   --md-btn-fg: #59636e;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --md-bg: #0d1117;
-    --md-fg: #e6edf3;
-    --md-fg-muted: #8d96a0;
-    --md-border: #3d444d;
-    --md-code-bg: #161b22;
-    --md-code-fg: #e6edf3;
-    --md-link: #4493f8;
-    --md-quote-border: #3d444d;
-    --md-quote-bg: #161b22;
-    --md-table-head-bg: #161b22;
-    --md-table-border: #3d444d;
-    --md-table-stripe: #161b22;
-    --md-hr: #3d444d;
-    --md-checkbox-accent: #4493f8;
-    --md-btn-bg: #21262d;
-    --md-btn-border: #3d444d;
-    --md-btn-fg: #8d96a0;
-  }
+:root[data-theme="dark"] {
+  --md-accent: #4493f8;
+  --md-bg: #0d1117;
+  --md-fg: #e6edf3;
+  --md-fg-muted: #8d96a0;
+  --md-border: #3d444d;
+  --md-code-bg: #161b22;
+  --md-code-fg: #e6edf3;
+  --md-quote-border: #3d444d;
+  --md-quote-bg: #161b22;
+  --md-table-head-bg: #161b22;
+  --md-table-border: #3d444d;
+  --md-table-stripe: #161b22;
+  --md-hr: #3d444d;
+  --md-btn-bg: #21262d;
+  --md-btn-border: #3d444d;
+  --md-btn-fg: #8d96a0;
 }
+
+/* 强调色预设（浅色） */
+:root[data-accent="green"] { --md-accent: #1a7f37; }
+:root[data-accent="purple"] { --md-accent: #8250df; }
+:root[data-accent="orange"] { --md-accent: #bc4c00; }
+:root[data-accent="rose"] { --md-accent: #cf222e; }
+/* 强调色预设（深色，避免在暗背景上过暗） */
+:root[data-theme="dark"][data-accent="green"] { --md-accent: #3fb950; }
+:root[data-theme="dark"][data-accent="purple"] { --md-accent: #a371f7; }
+:root[data-theme="dark"][data-accent="orange"] { --md-accent: #d29922; }
+:root[data-theme="dark"][data-accent="rose"] { --md-accent: #ff7b72; }
 
 * { box-sizing: border-box; }
 
@@ -702,3 +717,90 @@ body {
 }
 .tm-toast-error { background: #d1242f; }
 .tm-toast-hide { opacity: 0; transform: translate(-50%, 8px); }
+
+/* ---- 主题切换：按钮 + 下拉菜单 ---- */
+.tm-theme-wrap { position: relative; display: inline-flex; }
+#tm-theme-toggle { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#tm-theme-toggle .tm-theme-ic { font-size: 13px; line-height: 1; }
+#tm-theme-toggle.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+}
+
+#tm-theme-pop {
+  position: absolute; /* 相对 .tm-theme-wrap 定位；toolbar sticky → 滚动时视觉固定 */
+  top: calc(100% + 6px);
+  right: 0;
+  width: 220px;
+  display: none;
+  flex-direction: column;
+  background: var(--md-bg, #ffffff);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  z-index: 300;
+  font-size: 12px;
+  padding: 6px 10px 10px;
+}
+#tm-theme-pop.open { display: flex; }
+.tm-theme-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--md-border, #d1d9e0);
+  margin-bottom: 6px;
+}
+.tm-theme-title {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--md-fg-muted, #59636e);
+  text-transform: uppercase;
+}
+.tm-theme-close {
+  width: 20px; height: 20px;
+  line-height: 1;
+  font-size: 14px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-theme-close:hover { color: var(--md-fg, #1f2328); background: var(--md-code-bg, #f6f8fa); }
+.tm-theme-sec {
+  color: var(--md-fg-muted, #59636e);
+  font-size: 11px;
+  margin: 8px 0 5px;
+}
+.tm-theme-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.tm-theme-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.tm-theme-opt:hover { border-color: var(--md-checkbox-accent, #0969da); color: var(--md-checkbox-accent, #0969da); }
+.tm-theme-opt.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 10%, transparent);
+}
+.tm-theme-opt .tm-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, .15);
+  flex: none;
+}
+.tm-theme-opt.active .tm-dot {
+  box-shadow: 0 0 0 1px var(--md-checkbox-accent, #0969da);
+}
