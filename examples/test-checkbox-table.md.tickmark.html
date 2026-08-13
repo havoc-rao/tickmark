@@ -1,3 +1,996 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>test-checkbox-table.md</title>
+  <style>
+/* =========================================================================
+   TickMark CLI — Webview Styles
+   ========================================================================= */
+
+:root {
+  --md-bg: #ffffff;
+  --md-fg: #1f2328;
+  --md-fg-muted: #59636e;
+  --md-border: #d1d9e0;
+  --md-code-bg: #f6f8fa;
+  --md-code-fg: #1f2328;
+  --md-link: #0969da;
+  --md-quote-border: #d1d9e0;
+  --md-quote-bg: #f6f8fa;
+  --md-table-head-bg: #f6f8fa;
+  --md-table-border: #d1d9e0;
+  --md-table-stripe: #fafbfc;
+  --md-hr: #d1d9e0;
+  --md-checkbox-accent: #0969da;
+  --md-btn-bg: #f6f8fa;
+  --md-btn-border: #d1d9e0;
+  --md-btn-fg: #59636e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-bg: #0d1117;
+    --md-fg: #e6edf3;
+    --md-fg-muted: #8d96a0;
+    --md-border: #3d444d;
+    --md-code-bg: #161b22;
+    --md-code-fg: #e6edf3;
+    --md-link: #4493f8;
+    --md-quote-border: #3d444d;
+    --md-quote-bg: #161b22;
+    --md-table-head-bg: #161b22;
+    --md-table-border: #3d444d;
+    --md-table-stripe: #161b22;
+    --md-hr: #3d444d;
+    --md-checkbox-accent: #4493f8;
+    --md-btn-bg: #21262d;
+    --md-btn-border: #3d444d;
+    --md-btn-fg: #8d96a0;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 48px 0;
+  background: var(--md-bg);
+  color: var(--md-fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ---- 工具栏 ---- */
+.tm-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--md-bg);
+  border-bottom: 1px solid var(--md-border);
+  font-size: 13px;
+}
+
+.tm-title {
+  font-weight: 700;
+  color: var(--md-checkbox-accent);
+}
+
+.tm-file {
+  color: var(--md-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.tm-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--md-btn-bg);
+  color: var(--md-fg);
+  border: 1px solid var(--md-btn-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tm-btn:hover { border-color: var(--md-checkbox-accent); color: var(--md-checkbox-accent); }
+
+/* ---- 内容区 ---- */
+.markdown-body {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 28px;
+}
+
+/* ---- 标题 ---- */
+/* 大纲 scrollIntoView 跳转时为 sticky 工具栏留白，避免标题被遮挡 */
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  margin-top: 28px; margin-bottom: 16px; font-weight: 600; line-height: 1.25;
+  scroll-margin-top: 56px;
+}
+.markdown-body h1 { font-size: 1.8em; padding-bottom: .3em; border-bottom: 1px solid var(--md-border); }
+.markdown-body h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--md-border); }
+.markdown-body h3 { font-size: 1.25em; }
+.markdown-body h4 { font-size: 1em; }
+.markdown-body h5 { font-size: .875em; }
+.markdown-body h6 { font-size: .85em; color: var(--md-fg-muted); }
+
+.markdown-body p { margin: 0 0 16px 0; }
+.markdown-body a { color: var(--md-link); text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+
+/* ---- 列表 ---- */
+.markdown-body ul, .markdown-body ol { margin: 0 0 16px 0; padding-left: 2em; }
+.markdown-body li { margin-top: 4px; }
+
+/* ---- Checkbox ---- */
+.markdown-body .task-list-item { list-style: none; }
+.markdown-body .task-list-item-checkbox { margin: 0 6px 3px 0; }
+
+.markdown-body input[type="checkbox"] {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  width: 16px; height: 16px;
+  border: 2px solid var(--md-border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  transition: background-color .15s, border-color .15s;
+}
+.markdown-body input[type="checkbox"]:hover { border-color: var(--md-checkbox-accent); }
+.markdown-body input[type="checkbox"]:checked {
+  background-color: var(--md-checkbox-accent);
+  border-color: var(--md-checkbox-accent);
+}
+.markdown-body input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute; left: 4px; top: 1px;
+  width: 4px; height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ---- 代码 ---- */
+.markdown-body code {
+  font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  font-size: .875em;
+  padding: .2em .4em;
+  background: var(--md-code-bg);
+  border-radius: 4px;
+}
+.markdown-body pre {
+  font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  font-size: .875em;
+  background: var(--md-code-bg);
+  border: 1px solid var(--md-border);
+  border-radius: 6px;
+  padding: 16px;
+  overflow: auto;
+  position: relative;
+}
+.markdown-body pre code { padding: 0; background: none; }
+
+.code-copy-btn {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 11px; padding: 3px 10px;
+  background: var(--md-btn-bg);
+  color: var(--md-btn-fg);
+  border: 1px solid var(--md-btn-border);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.markdown-body pre:hover .code-copy-btn { opacity: 1; }
+.code-copy-btn:hover { color: var(--md-checkbox-accent); border-color: var(--md-checkbox-accent); }
+
+/* ---- 引用 ---- */
+.markdown-body blockquote {
+  margin: 0 0 16px 0;
+  padding: 8px 16px;
+  color: var(--md-fg-muted);
+  border-left: 4px solid var(--md-quote-border);
+  background: var(--md-quote-bg);
+  border-radius: 0 6px 6px 0;
+}
+.markdown-body blockquote > :first-child { margin-top: 0; }
+.markdown-body blockquote > :last-child { margin-bottom: 0; }
+
+/* ---- 表格 ---- */
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 16px 0;
+  border: 1px solid var(--md-table-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: block;
+  overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
+}
+.markdown-body thead { background: var(--md-table-head-bg); }
+.markdown-body th, .markdown-body td {
+  padding: 8px 14px;
+  border: 1px solid var(--md-table-border);
+  text-align: left;
+}
+.markdown-body th {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  border-bottom: 2px solid color-mix(in srgb, var(--md-checkbox-accent, #0969da) 30%, var(--md-table-border));
+  transition: background-color .15s, color .15s;
+}
+.markdown-body th:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 12%, transparent);
+  color: var(--md-checkbox-accent, #0969da);
+}
+.markdown-body th.tm-num, .markdown-body td.tm-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-body td.tm-empty {
+  color: var(--md-fg-muted, #59636e);
+  font-style: italic;
+  opacity: .75;
+  user-select: none;
+}
+.markdown-body tbody tr { transition: background-color .12s; }
+.markdown-body tbody tr:nth-child(even) { background: var(--md-table-stripe); }
+.markdown-body tbody tr:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 7%, transparent);
+}
+
+/* ---- 表格列过滤（聚合统计 / 多选 / 全选 / 反选） ---- */
+.tm-tbl { margin: 0 0 16px 0; position: relative; }
+.tm-tbl-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: var(--md-code-bg, #f6f8fa);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.tm-tbl-sum {
+  color: var(--md-fg, #1f2328);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+.tm-tbl-sum::before {
+  content: '▤';
+  margin-right: 6px;
+  font-weight: 400;
+  color: var(--md-fg-muted, #59636e);
+  opacity: .8;
+}
+.tm-cf-cell { display: inline-flex; max-width: 150px; }
+.tm-cf-ic { display: inline-flex; flex: none; opacity: .8; }
+.tm-colfilter:hover .tm-cf-ic { opacity: 1; }
+.tm-colfilter.active .tm-cf-ic { opacity: 1; }
+.tm-colfilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 140px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.tm-colfilter:hover { border-color: var(--md-checkbox-accent, #0969da); color: var(--md-checkbox-accent, #0969da); }
+.tm-cf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-cf-num {
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--md-border, #d1d9e0);
+  color: var(--md-fg, #1f2328);
+}
+.tm-colfilter.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 10%, transparent);
+}
+.tm-colfilter.active .tm-cf-num { background: var(--md-checkbox-accent, #0969da); color: #fff; }
+.tm-tbl-clear {
+  margin-left: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: 1px dashed var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-tbl-clear:hover { color: #d1242f; border-color: #d1242f; }
+
+/* 过滤弹层（fixed 定位到 document.body，避免被 table overflow 裁剪） */
+.tm-fpop {
+  position: absolute; /* 相对 .tm-tbl 定位上下文，滚动时随容器天然跟随 */
+  z-index: 300;
+  display: none;
+  max-height: 400px;
+  overflow: hidden;
+  background: var(--md-bg, #ffffff);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  font-size: 12px;
+}
+.tm-fpop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 4px;
+  color: var(--md-fg-muted, #59636e);
+}
+.tm-fpop-master {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+.tm-fpop-master input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--md-checkbox-accent, #0969da);
+  cursor: pointer;
+}
+.tm-fpop-title {
+  font-weight: 600;
+  color: var(--md-fg, #1f2328);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-fpop-search {
+  width: calc(100% - 20px);
+  margin: 4px 10px 6px;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tm-fpop-actions { display: flex; gap: 8px; padding: 0 10px 6px; }
+.tm-fpop-actions button {
+  padding: 2px 10px;
+  font-size: 11px;
+  background: transparent;
+  color: var(--md-link, #0969da);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-fpop-actions button:hover { border-color: var(--md-checkbox-accent, #0969da); }
+.tm-fpop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-border, #d1d9e0) transparent;
+}
+.tm-fpop-list::-webkit-scrollbar { width: 8px; }
+.tm-fpop-list::-webkit-scrollbar-track { background: transparent; }
+.tm-fpop-list::-webkit-scrollbar-thumb {
+  background: var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.tm-fpop-list::-webkit-scrollbar-thumb:hover { background-color: var(--md-fg-muted, #59636e); }
+.tm-fpop-list li label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color .1s;
+}
+.tm-fpop-list li label:hover { background: var(--md-code-bg, #f6f8fa); }
+.tm-fpop-list li.selected label {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 8%, transparent);
+}
+.tm-fpop-list li.selected label:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 14%, transparent);
+}
+.tm-fpop-list input[type="checkbox"] { accent-color: var(--md-checkbox-accent, #0969da); }
+.tm-fpop-val {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-fpop-cnt {
+  color: var(--md-fg-muted, #59636e);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 20px;
+  padding: 0 6px;
+  text-align: center;
+  background: var(--md-code-bg, #f6f8fa);
+  border-radius: 8px;
+}
+.tm-fpop-empty { color: var(--md-fg-muted, #59636e); padding: 6px 8px 8px; }
+
+/* ---- 图片 / 分割线 ---- */
+.markdown-body img { max-width: 100%; border-radius: 6px; }
+.markdown-body hr { height: 1px; border: 0; background: var(--md-hr); margin: 24px 0; }
+
+/* ---- 大纲（TOC）：按钮下方下拉 list 浮层 ---- */
+.tm-outline-wrap { position: relative; display: inline-flex; }
+#tm-outline-toggle { display: inline-flex; align-items: center; gap: 4px; }
+#tm-outline-toggle .tm-toc-ic { font-size: 14px; line-height: 1; }
+#tm-outline-toggle.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+}
+.tm-outline-fab { /* 无工具栏时浮动按钮回退 */
+  position: fixed; right: 16px; bottom: 24px; z-index: 200;
+}
+
+#tm-outline {
+  position: absolute; /* 相对 .tm-outline-wrap（贴住按钮）；toolbar sticky → 滚动时视觉固定 */
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  max-height: min(340px, calc(100vh - 140px));
+  display: none;
+  flex-direction: column;
+  background: var(--md-bg, #ffffff);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  z-index: 300;
+  font-size: 13px;
+  overflow: hidden;
+}
+#tm-outline.open { display: flex; }
+.tm-toc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--md-border, #d1d9e0);
+}
+.tm-toc-title {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--md-fg-muted, #59636e);
+  text-transform: uppercase;
+}
+.tm-toc-close {
+  width: 22px; height: 22px;
+  line-height: 1;
+  font-size: 16px;
+  background: transparent;
+  color: var(--md-fg-muted, #59636e);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tm-toc-close:hover { color: var(--md-fg, #1f2328); background: var(--md-code-bg, #f6f8fa); }
+.tm-toc-body {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-border, #d1d9e0) transparent;
+}
+.tm-toc-body::-webkit-scrollbar { width: 8px; }
+.tm-toc-body::-webkit-scrollbar-track { background: transparent; }
+.tm-toc-body::-webkit-scrollbar-thumb {
+  background: var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.tm-toc-list { list-style: none; margin: 0; padding: 6px 0; }
+.tm-toc-link {
+  display: block;
+  padding: 4px 14px;
+  color: var(--md-fg, #1f2328);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color .12s, border-color .12s, color .12s;
+}
+.tm-toc-link:hover {
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-checkbox-accent, #0969da);
+}
+.tm-toc-link.active {
+  border-left-color: var(--md-checkbox-accent, #0969da);
+  color: var(--md-checkbox-accent, #0969da);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 8%, transparent);
+}
+.tm-toc-empty { padding: 12px 14px; color: var(--md-fg-muted, #59636e); font-size: 12px; }
+
+/* ---- Toast ---- */
+.tm-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: #1f2328;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  opacity: 1;
+  transition: opacity .4s, transform .4s;
+  z-index: 100;
+}
+.tm-toast-error { background: #d1242f; }
+.tm-toast-hide { opacity: 0; transform: translate(-50%, 8px); }
+
+  </style>
+</head>
+<body>
+  <header class="tm-toolbar">
+    <span class="tm-title">TickMark</span>
+    <span class="tm-file">test-checkbox-table.md</span>
+    <button id="tm-refresh" class="tm-btn" title="拉取最新 md 并重新渲染">Sync</button>
+  </header>
+  <main class="markdown-body">
+    <h1 data-source-line="0">TickMark 测试样例：Checkbox + GFM 表格</h1>
+<blockquote data-source-line="2">
+<p data-source-line="2">用途：验证 <code>tickmark serve</code> 的 <strong>checkbox 点击回写</strong>、<strong>GFM 表格渲染</strong> 与 <strong>表格列过滤</strong>。
+运行：<code>tickmark serve examples/test-checkbox-table.md</code>（或 <code>--no-open</code>），
+在预览中点击 checkbox，观察源 md 文件是否被实时改写；
+每个表格顶部有过滤工具栏，可统计列内取值分布（聚合计数）并多选 / 全选 / 反选 / 清空。</p>
+</blockquote>
+<h2 data-source-line="7">1. Checkbox（任务列表回写）</h2>
+<h3 data-source-line="9">1.1 基础三种状态</h3>
+<ul data-source-line="11" class="contains-task-list">
+<li data-source-line="11" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 未勾选（点击后变 <code>[x]</code> 并回写源文件）</label></li>
+<li data-source-line="12" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> 已勾选-小写 x（点击后清空为 <code>[ ]</code>）</label></li>
+<li data-source-line="13" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> 已勾选-大写 X（点击后清空，回写统一为小写 x / 空格）</label></li>
+</ul>
+<h3 data-source-line="15">1.2 不同列表前缀</h3>
+<ul data-source-line="17" class="contains-task-list">
+<li data-source-line="17" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 星号前缀未勾选</label></li>
+<li data-source-line="18" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> 星号前缀已勾选</label></li>
+</ul>
+<ul data-source-line="19" class="contains-task-list">
+<li data-source-line="19" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 加号前缀未勾选</label></li>
+<li data-source-line="20" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> 加号前缀已勾选</label></li>
+</ul>
+<h3 data-source-line="22">1.3 嵌套缩进（多级）</h3>
+<ul data-source-line="24" class="contains-task-list">
+<li data-source-line="24" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 一级任务</label>
+<ul data-source-line="25" class="contains-task-list">
+<li data-source-line="25" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 二级-未勾选</label></li>
+<li data-source-line="26" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> 二级-已勾选</label>
+<ul data-source-line="27" class="contains-task-list">
+<li data-source-line="27" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 三级-未勾选</label></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 data-source-line="29">1.4 行内格式混合 / 边界</h3>
+<ul data-source-line="31" class="contains-task-list">
+<li data-source-line="31" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> <strong>加粗</strong> + <code>行内代码</code> + <a href="https://example.com">链接</a> 混合内容</label></li>
+<li data-source-line="32" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> <s>删除线</s> + emoji 🎯 + 中文标点</label></li>
+<li data-source-line="33" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 空内容后缀（本行 checkbox 后无文字）</label></li>
+<li data-source-line="34">[x]</li>
+</ul>
+<h3 data-source-line="36">1.5 负例（仅观察渲染，点击不回写）</h3>
+<p data-source-line="38">&lt;!-- 回写正则 ^(\s*[-<em>+]\s+[)([ xX])(])(.</em>)$ 仅匹配 [-*+] 前缀：
+有序列表 “1. [ ]” 与引用块 “&gt; - [ ]” 渲染正常，但点击不会改写 --&gt;</p>
+<ol data-source-line="40" class="contains-task-list">
+<li data-source-line="40" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 有序列表中的 checkbox —— 渲染 OK，回写不支持</label></li>
+</ol>
+<blockquote data-source-line="41">
+<ul data-source-line="41" class="contains-task-list">
+<li data-source-line="41" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 引用块中的 checkbox —— 渲染 OK，回写不支持</label></li>
+</ul>
+</blockquote>
+<h2 data-source-line="43">2. GFM 表格</h2>
+<h3 data-source-line="45">2.1 三种对齐方式</h3>
+<table data-source-line="47">
+<thead data-source-line="47">
+<tr data-source-line="47">
+<th style="text-align:left">左对齐</th>
+<th style="text-align:center">居中</th>
+<th style="text-align:right">右对齐</th>
+</tr>
+</thead>
+<tbody data-source-line="49">
+<tr data-source-line="49">
+<td style="text-align:left">a</td>
+<td style="text-align:center">b</td>
+<td style="text-align:right">c</td>
+</tr>
+<tr data-source-line="50">
+<td style="text-align:left">内容较长的单元格</td>
+<td style="text-align:center">居中内容</td>
+<td style="text-align:right">右对齐内容</td>
+</tr>
+</tbody>
+</table>
+<h3 data-source-line="52">2.2 表头与单元格内格式</h3>
+<table data-source-line="54">
+<thead data-source-line="54">
+<tr data-source-line="54">
+<th>功能</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody data-source-line="56">
+<tr data-source-line="56">
+<td>粗体</td>
+<td><strong>重要</strong></td>
+</tr>
+<tr data-source-line="57">
+<td>行内代码</td>
+<td><code>tickmark serve</code></td>
+</tr>
+<tr data-source-line="58">
+<td>链接</td>
+<td><a href="../README.md">README</a></td>
+</tr>
+<tr data-source-line="59">
+<td>转义竖线</td>
+<td>显示为 `a</td>
+</tr>
+<tr data-source-line="60">
+<td>空单元格</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 data-source-line="62">2.3 多行 / 多列 / 空单元格</h3>
+<table data-source-line="64">
+<thead data-source-line="64">
+<tr data-source-line="64">
+<th>列A</th>
+<th>列B</th>
+<th>列C</th>
+</tr>
+</thead>
+<tbody data-source-line="66">
+<tr data-source-line="66">
+<td>有值</td>
+<td></td>
+<td>空中间</td>
+</tr>
+<tr data-source-line="67">
+<td></td>
+<td></td>
+<td>全空行</td>
+</tr>
+<tr data-source-line="68">
+<td>末行</td>
+<td>竖线 | 转义</td>
+<td>尾格</td>
+</tr>
+</tbody>
+</table>
+<h3 data-source-line="70">2.4 表格内 checkbox（仅渲染观察）</h3>
+<table data-source-line="72">
+<thead data-source-line="72">
+<tr data-source-line="72">
+<th>任务</th>
+<th>状态</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody data-source-line="74">
+<tr data-source-line="74">
+<td>写测试样例</td>
+<td>- [ ]</td>
+<td>未完成</td>
+</tr>
+<tr data-source-line="75">
+<td>跑测试</td>
+<td>- [x]</td>
+<td>已完成</td>
+</tr>
+</tbody>
+</table>
+<h2 data-source-line="77">3. 混合场景速查</h2>
+<ul data-source-line="79" class="contains-task-list">
+<li data-source-line="79" class="task-list-item enabled"><label><input class="task-list-item-checkbox"type="checkbox"> 待办项一</label></li>
+<li data-source-line="80" class="task-list-item enabled"><label><input class="task-list-item-checkbox" checked=""type="checkbox"> 待办项二（已完成）</label></li>
+</ul>
+<table data-source-line="82">
+<thead data-source-line="82">
+<tr data-source-line="82">
+<th style="text-align:center">优先级</th>
+<th>事项</th>
+<th style="text-align:center">完成</th>
+</tr>
+</thead>
+<tbody data-source-line="84">
+<tr data-source-line="84">
+<td style="text-align:center">P0</td>
+<td>发布 v0.1.0</td>
+<td style="text-align:center">- [x]</td>
+</tr>
+<tr data-source-line="85">
+<td style="text-align:center">P1</td>
+<td>写测试样例</td>
+<td style="text-align:center">- [ ]</td>
+</tr>
+<tr data-source-line="86">
+<td style="text-align:center">P2</td>
+<td>验收表格渲染</td>
+<td style="text-align:center">✅</td>
+</tr>
+</tbody>
+</table>
+<h2 data-source-line="88">4. 表格列过滤（聚合统计 / 多选 / 全选 / 反选）</h2>
+<blockquote data-source-line="90">
+<p data-source-line="90">规则速记：同列多选 = OR（并集）；跨列叠加 = AND；清空某列 = 该列筛出 0 行；
+空单元格显示为 <code>(空)</code>；计数只统计「通过其它列过滤」的行，组合筛选时计数随其它列联动。</p>
+</blockquote>
+<h3 data-source-line="93">4.1 重复取值（观察聚合计数）</h3>
+<table data-source-line="95">
+<thead data-source-line="95">
+<tr data-source-line="95">
+<th style="text-align:center">优先级</th>
+<th>模块</th>
+<th>负责人</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody data-source-line="97">
+<tr data-source-line="97">
+<td style="text-align:center">P0</td>
+<td>登录</td>
+<td>张三</td>
+<td>已完成</td>
+</tr>
+<tr data-source-line="98">
+<td style="text-align:center">P0</td>
+<td>登录</td>
+<td>李四</td>
+<td>已完成</td>
+</tr>
+<tr data-source-line="99">
+<td style="text-align:center">P1</td>
+<td>支付</td>
+<td>张三</td>
+<td>进行中</td>
+</tr>
+<tr data-source-line="100">
+<td style="text-align:center">P1</td>
+<td>支付</td>
+<td>王五</td>
+<td>未开始</td>
+</tr>
+<tr data-source-line="101">
+<td style="text-align:center">P2</td>
+<td>搜索</td>
+<td>李四</td>
+<td>进行中</td>
+</tr>
+<tr data-source-line="102">
+<td style="text-align:center">P2</td>
+<td>搜索</td>
+<td>赵六</td>
+<td>未开始</td>
+</tr>
+<tr data-source-line="103">
+<td style="text-align:center">P2</td>
+<td>设置</td>
+<td>王五</td>
+<td>已完成</td>
+</tr>
+<tr data-source-line="104">
+<td style="text-align:center">P3</td>
+<td>设置</td>
+<td>赵六</td>
+<td>进行中</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-source-line="106">
+<p data-source-line="106">预期：<code>优先级</code> 列统计 P0×2 / P1×2 / P2×3 / P3×1；<code>负责人</code> 列每人均 ×2。
+选中 <code>优先级 = P0</code> 后，其余各列的计数应联动缩小为仅剩 P0 的两行（如 <code>状态</code> 只剩 已完成×2）。</p>
+</blockquote>
+<h3 data-source-line="109">4.2 空单元格（显示为 (空)）</h3>
+<table data-source-line="111">
+<thead data-source-line="111">
+<tr data-source-line="111">
+<th>事项</th>
+<th>备注</th>
+<th>里程碑</th>
+</tr>
+</thead>
+<tbody data-source-line="113">
+<tr data-source-line="113">
+<td>需求评审</td>
+<td>通过</td>
+<td>v1.0</td>
+</tr>
+<tr data-source-line="114">
+<td>接口联调</td>
+<td></td>
+<td>v1.0</td>
+</tr>
+<tr data-source-line="115">
+<td>灰度发布</td>
+<td>通过</td>
+<td></td>
+</tr>
+<tr data-source-line="116">
+<td>全量发布</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<blockquote data-source-line="118">
+<p data-source-line="118">预期：<code>备注</code> 列应有 <code>(空)</code>×2、<code>里程碑</code> 列应有 <code>(空)</code>×2；可单独勾选 <code>(空)</code> 筛选缺失项。</p>
+</blockquote>
+<h3 data-source-line="120">4.3 跨列组合（AND）与列内多选（OR）</h3>
+<table data-source-line="122">
+<thead data-source-line="122">
+<tr data-source-line="122">
+<th>城市</th>
+<th>季度</th>
+<th style="text-align:right">销售额</th>
+</tr>
+</thead>
+<tbody data-source-line="124">
+<tr data-source-line="124">
+<td>北京</td>
+<td>Q1</td>
+<td style="text-align:right">120</td>
+</tr>
+<tr data-source-line="125">
+<td>北京</td>
+<td>Q2</td>
+<td style="text-align:right">150</td>
+</tr>
+<tr data-source-line="126">
+<td>上海</td>
+<td>Q1</td>
+<td style="text-align:right">90</td>
+</tr>
+<tr data-source-line="127">
+<td>上海</td>
+<td>Q2</td>
+<td style="text-align:right">110</td>
+</tr>
+<tr data-source-line="128">
+<td>深圳</td>
+<td>Q1</td>
+<td style="text-align:right">80</td>
+</tr>
+<tr data-source-line="129">
+<td>深圳</td>
+<td>Q2</td>
+<td style="text-align:right">130</td>
+</tr>
+<tr data-source-line="130">
+<td>广州</td>
+<td>Q1</td>
+<td style="text-align:right">70</td>
+</tr>
+<tr data-source-line="131">
+<td>广州</td>
+<td>Q2</td>
+<td style="text-align:right">100</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-source-line="133">
+<p data-source-line="133">预期：<code>城市</code> 列多选「北京 + 上海」→ 4 行；再叠加 <code>季度 = Q1</code> → 2 行（北京 Q1 + 上海 Q1）；
+清空 <code>季度</code> 列 → 0 行；对 <code>城市</code> 反选 → 深圳 / 广州共 4 行。</p>
+</blockquote>
+<h3 data-source-line="136">4.4 搜索与数字列（右对齐数值）</h3>
+<table data-source-line="138">
+<thead data-source-line="138">
+<tr data-source-line="138">
+<th>商品</th>
+<th>分类</th>
+<th style="text-align:right">价格</th>
+</tr>
+</thead>
+<tbody data-source-line="140">
+<tr data-source-line="140">
+<td>键盘</td>
+<td>外设</td>
+<td style="text-align:right">399</td>
+</tr>
+<tr data-source-line="141">
+<td>鼠标</td>
+<td>外设</td>
+<td style="text-align:right">199</td>
+</tr>
+<tr data-source-line="142">
+<td>显示器</td>
+<td>外设</td>
+<td style="text-align:right">1299</td>
+</tr>
+<tr data-source-line="143">
+<td>耳机</td>
+<td>音频</td>
+<td style="text-align:right">499</td>
+</tr>
+<tr data-source-line="144">
+<td>音箱</td>
+<td>音频</td>
+<td style="text-align:right">899</td>
+</tr>
+<tr data-source-line="145">
+<td>鼠标垫</td>
+<td>外设</td>
+<td style="text-align:right">49</td>
+</tr>
+<tr data-source-line="146">
+<td>麦克风</td>
+<td>音频</td>
+<td style="text-align:right">599</td>
+</tr>
+<tr data-source-line="147">
+<td>摄像头</td>
+<td>外设</td>
+<td style="text-align:right">349</td>
+</tr>
+<tr data-source-line="148">
+<td>声卡</td>
+<td>音频</td>
+<td style="text-align:right">1299</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-source-line="150">
+<p data-source-line="150">预期：<code>分类</code> 列可搜索（如输入「外」过滤列表）；<code>价格</code> 列有重复值 1299×2，
+适合测试右对齐列、数字取值聚合，以及「全选 / 反选 / 清空」按钮对数值列的效果。</p>
+</blockquote>
+
+  </main>
+  <script>
+    window.__TICKMARK_API = "http://127.0.0.1:53348";
+  </script>
+  <script>
 /**
  * TickMark CLI — 页面交互脚本
  *
@@ -898,3 +1891,7 @@
     }, 2600);
   }
 })();
+
+  </script>
+</body>
+</html>
