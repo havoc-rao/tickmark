@@ -278,79 +278,119 @@ body {
   background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 7%, transparent);
 }
 
-/* ---- 表格列过滤（聚合统计 / 多选 / 全选 / 反选） ---- */
+/* ---- 表格列过滤（两行布局：列筛选条 + 操作条） ---- */
 .tm-tbl { margin: 0 0 16px 0; position: relative; }
 .tm-tbl-bar {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
   padding: 6px 8px;
   margin-bottom: 8px;
   background: var(--md-code-bg, #f6f8fa);
   border: 1px solid var(--md-border, #d1d9e0);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 12px;
 }
-.tm-tbl-sum {
-  color: var(--md-fg, #1f2328);
-  font-weight: 600;
-  white-space: nowrap;
-  margin-right: 4px;
+
+/* 第 1 行：列筛选按钮 —— 列数自适应 wrap，每列固定等宽 */
+.tm-tbl-cf-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 4px;
 }
-.tm-tbl-sum::before {
-  content: '▤';
-  margin-right: 6px;
-  font-weight: 400;
-  color: var(--md-fg-muted, #59636e);
-  opacity: .8;
-}
-.tm-cf-cell { display: inline-flex; max-width: 150px; }
-.tm-cf-ic { display: inline-flex; flex: none; opacity: .8; }
-.tm-colfilter:hover .tm-cf-ic { opacity: 1; }
-.tm-colfilter.active .tm-cf-ic { opacity: 1; }
+.tm-cf-cell { display: block; min-width: 0; }
 .tm-colfilter {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  max-width: 140px;
-  padding: 3px 8px;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 6px;
   font-size: 12px;
-  line-height: 1.4;
-  background: transparent;
+  line-height: 1.3;
+  background: var(--md-bg, #ffffff);
   color: var(--md-fg-muted, #59636e);
   border: 1px solid var(--md-border, #d1d9e0);
   border-radius: 4px;
   cursor: pointer;
   transition: border-color .15s, color .15s, background-color .15s;
+  min-width: 0;
 }
-.tm-colfilter:hover { border-color: var(--md-checkbox-accent, #0969da); color: var(--md-checkbox-accent, #0969da); }
-.tm-cf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-colfilter:hover {
+  border-color: var(--md-checkbox-accent, #0969da);
+  color: var(--md-checkbox-accent, #0969da);
+}
+.tm-colfilter.active {
+  color: #fff;
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: var(--md-checkbox-accent, #0969da);
+}
+.tm-colfilter.active .tm-cf-num {
+  background: rgba(255, 255, 255, .25);
+  color: #fff;
+}
+.tm-cf-ic {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  opacity: .8;
+}
+.tm-colfilter:hover .tm-cf-ic,
+.tm-colfilter.active .tm-cf-ic { opacity: 1; }
+.tm-cf-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 .tm-cf-num {
+  flex: none;
   font-size: 10px;
-  line-height: 16px;
-  padding: 0 6px;
+  line-height: 14px;
+  padding: 0 5px;
   border-radius: 8px;
   background: var(--md-border, #d1d9e0);
   color: var(--md-fg, #1f2328);
+  font-variant-numeric: tabular-nums;
 }
-.tm-colfilter.active {
-  color: var(--md-checkbox-accent, #0969da);
-  border-color: var(--md-checkbox-accent, #0969da);
-  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 10%, transparent);
+
+/* 第 2 行：操作条 —— 总数 + 清除筛选 + +列 */
+.tm-tbl-op-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--md-border, #d1d9e0);
 }
-.tm-colfilter.active .tm-cf-num { background: var(--md-checkbox-accent, #0969da); color: #fff; }
+.tm-tbl-sum {
+  color: var(--md-fg, #1f2328);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 2px 8px;
+  background: var(--md-bg, #ffffff);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 10px;
+  font-size: 11px;
+}
+.tm-tbl-sum::before {
+  content: '▤';
+  margin-right: 4px;
+  font-weight: 400;
+  color: var(--md-fg-muted, #59636e);
+}
 .tm-tbl-clear {
-  margin-left: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
+  padding: 2px 10px;
+  font-size: 11px;
   background: transparent;
   color: var(--md-fg-muted, #59636e);
   border: 1px dashed var(--md-border, #d1d9e0);
   border-radius: 4px;
   cursor: pointer;
+  transition: color .15s, border-color .15s;
 }
-.tm-tbl-clear:hover { color: #d1242f; border-color: #d1242f; }
+.tm-tbl-clear:hover:not(:disabled) { color: #d1242f; border-color: #d1242f; }
+.tm-tbl-clear:disabled { opacity: .4; cursor: default; }
 
 /* 过滤弹层（fixed 定位到 document.body，避免被 table overflow 裁剪） */
 .tm-fpop {
@@ -487,18 +527,18 @@ body {
   border-color: var(--md-checkbox-accent, #0969da);
 }
 
-/* 表头悬停 + 按钮 */
-.tm-th-add {
+/* 表头 × 删除按钮（右侧；编辑模式下常驻可见，hover 红色） */
+.tm-th-del {
   position: absolute;
   right: 1px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   line-height: 1;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 400;
   background: var(--md-btn-bg, #f6f8fa);
   color: var(--md-fg-muted, #59636e);
   border: 1px solid var(--md-border, #d1d9e0);
@@ -507,11 +547,20 @@ body {
   opacity: 0;
   transition: opacity .12s, background-color .12s, color .12s;
 }
-.markdown-body th:hover .tm-th-add { opacity: 1; }
-.tm-th-add:hover {
-  color: var(--md-checkbox-accent, #0969da);
-  border-color: var(--md-checkbox-accent, #0969da);
-  background: var(--md-bg, #ffffff);
+.markdown-body th:hover .tm-th-del { opacity: 1; }
+.tm-th-del:hover {
+  color: #d1242f;
+  border-color: #d1242f;
+  background: color-mix(in srgb, #d1242f 8%, transparent);
+}
+/* 编辑模式下：× 常驻可见 */
+html.tm-edit-mode .tm-th-del { opacity: 1; }
+/* 删除确认态：变红填充 */
+.tm-th-del.confirming {
+  background: #d1242f;
+  color: #fff;
+  border-color: #d1242f;
+  opacity: 1;
 }
 
 /* 新增列的可编辑单元格 */
@@ -533,6 +582,37 @@ body {
   border-radius: 3px;
 }
 .markdown-body td.tm-edit-cell:focus:empty::before { content: ''; }
+
+/* checkbox 单元格：批量填值 [x] / [ ] 时启用 → 点一下切换为对值并回写 md */
+.markdown-body td.tm-cb-cell {
+  cursor: pointer;
+  user-select: none;
+  text-align: center;
+  vertical-align: middle;
+  color: var(--md-checkbox-accent, #0969da);
+}
+.markdown-body td.tm-cb-cell:hover {
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 8%, transparent);
+}
+.markdown-body td.tm-cb-cell[data-checked="0"] { color: var(--md-fg-muted, #59636e); }
+.markdown-body td.tm-cb-cell > .tm-cb-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: inherit;
+}
+.markdown-body td.tm-cb-cell[data-checked="1"] > .tm-cb-glyph {
+  background: var(--md-checkbox-accent, #0969da);
+  color: var(--md-bg, #ffffff);
+}
 
 /* 添加列弹层 */
 .tm-ac-pop {
@@ -584,6 +664,85 @@ body {
 }
 .tm-ac-name:focus { outline: none; border-color: var(--md-checkbox-accent, #0969da); }
 .tm-ac-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* 新增列：批量填值输入框（与列名共用样式，自带 hint） */
+.tm-ac-fill {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 5px 8px;
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tm-ac-fill:focus { outline: none; border-color: var(--md-checkbox-accent, #0969da); }
+
+/* 新增列：列类型 / 复选框默认状态 选择器 */
+.tm-ac-type-row, .tm-ac-cb-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tm-ac-label {
+  font-size: 11px;
+  color: var(--md-fg-muted, #59636e);
+  white-space: nowrap;
+}
+.tm-ac-type, .tm-ac-cb-default {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.tm-ac-type:hover, .tm-ac-cb-default:hover {
+  border-color: var(--md-checkbox-accent, #0969da);
+  color: var(--md-checkbox-accent, #0969da);
+}
+.tm-ac-type.active, .tm-ac-cb-default.active, .tm-ac-pos-side.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 10%, transparent);
+}
+.tm-ac-pos-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tm-ac-pos-select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  background: var(--md-code-bg, #f6f8fa);
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tm-ac-pos-select:focus { outline: none; border-color: var(--md-checkbox-accent, #0969da); }
+.tm-ac-pos-side {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--md-fg, #1f2328);
+  border: 1px solid var(--md-border, #d1d9e0);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.tm-ac-pos-side:hover {
+  border-color: var(--md-checkbox-accent, #0969da);
+  color: var(--md-checkbox-accent, #0969da);
+}
 .tm-ac-actions button {
   padding: 3px 14px;
   font-size: 12px;
@@ -717,6 +876,57 @@ body {
 }
 .tm-toast-error { background: #d1242f; }
 .tm-toast-hide { opacity: 0; transform: translate(-50%, 8px); }
+
+/* ---- 表格编辑模式：拖拽手柄 + 列移动视觉提示 ---- */
+/* 拖拽手柄默认隐藏；进入编辑模式（document.documentElement.tm-edit-mode）后显示 */
+.tm-th-grip {
+  display: none;
+  cursor: grab;
+  width: 14px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--md-fg-muted, #59636e);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  flex: none;
+}
+.tm-th-grip:hover { color: var(--md-checkbox-accent, #0969da); background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 8%, transparent); }
+.tm-th-grip:active { cursor: grabbing; }
+html.tm-edit-mode .tm-th-grip { display: inline-flex; align-items: center; justify-content: center; }
+/* 编辑模式下：表头整体禁止文本选中，列移动不会被原生选中态打断 */
+html.tm-edit-mode .markdown-body th { user-select: none; -webkit-user-select: none; }
+/* 拖拽态：源列半透明 */
+html.tm-edit-mode .markdown-body th.tm-dragging { opacity: .35; }
+/* 拖拽态：目标列前后插入位置指示（左/右竖线） */
+html.tm-edit-mode .markdown-body th.tm-drop-left,
+html.tm-edit-mode .markdown-body th.tm-drop-right {
+  position: relative;
+}
+html.tm-edit-mode .markdown-body th.tm-drop-left::before,
+html.tm-edit-mode .markdown-body th.tm-drop-right::after {
+  content: '';
+  position: absolute;
+  top: -2px; bottom: -2px;
+  width: 3px;
+  background: var(--md-checkbox-accent, #0969da);
+  border-radius: 2px;
+  box-shadow: 0 0 4px color-mix(in srgb, var(--md-checkbox-accent, #0969da) 60%, transparent);
+}
+html.tm-edit-mode .markdown-body th.tm-drop-left::before { left: -2px; }
+html.tm-edit-mode .markdown-body th.tm-drop-right::after { right: -2px; }
+/* 编辑模式开关按钮高亮态（与其他工具栏按钮 active 复用 accent 色） */
+#tm-edit-toggle.active {
+  color: var(--md-checkbox-accent, #0969da);
+  border-color: var(--md-checkbox-accent, #0969da);
+  background: color-mix(in srgb, var(--md-checkbox-accent, #0969da) 10%, transparent);
+}
 
 /* ---- 主题切换：按钮 + 下拉菜单 ---- */
 .tm-theme-wrap { position: relative; display: inline-flex; }

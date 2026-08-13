@@ -132,10 +132,39 @@
     var tds = table.querySelectorAll('td');
     for (var i = 0; i < tds.length; i++) {
       var td = tds[i];
+      if (td.classList.contains('tm-cb-cell')) continue; // checkbox 单元格不标记空
       if ((td.textContent || '').trim() === '' && !td.querySelector('img, input')) {
         td.classList.add('tm-empty');
         td.textContent = '(空)';
       }
+    }
+  }
+
+  /**
+   * 把表格单元格内形如 [ ] / [x] / [X] 的纯文本转换为可点击的 checkbox 单元格。
+   * markdown-it 只在列表项里渲染 task-list checkbox，表格单元格里 [x] 只是字面文本 →
+   * 这里手动识别并渲染为 tm-cb-cell，点击走 /api/table/set-cell 回写。
+   * 幂等：已转换（含 .tm-cb-glyph）或含其他元素（img/input）的 td 跳过。
+   */
+  function markCheckboxCells(table) {
+    var tds = table.querySelectorAll('td');
+    for (var i = 0; i < tds.length; i++) {
+      var td = tds[i];
+      if (td.classList.contains('tm-cb-cell')) continue;
+      if (td.querySelector('img, input, .tm-cb-glyph')) continue;
+      var raw = (td.textContent || '').trim();
+      var m = raw.match(/^\[([ xX])\]$/);
+      if (!m) continue;
+      var checked = m[1] === 'x' || m[1] === 'X';
+      td.classList.add('tm-cb-cell');
+      td.setAttribute('data-checked', checked ? '1' : '0');
+      td.setAttribute('data-cb-value', checked ? '[x]' : '[ ]');
+      td.textContent = '';
+      var glyph = document.createElement('span');
+      glyph.className = 'tm-cb-glyph';
+      if (checked) glyph.textContent = '\u2713';
+      td.appendChild(glyph);
+      td.title = '点击切换 [x] / [ ]';
     }
   }
 
@@ -289,7 +318,7 @@
     });
   }
 
-  /** 纯函数渲染：工具栏（汇总行数 + 每列过滤按钮 + 清除筛选） */
+  /** 纯函数渲染：工具栏（两行布局 —— 列筛选条 + 操作条） */
   function renderFilterBar(m) {
     var visible = 0, r, c, s, num, cell, btn, ic, nm;
     for (r = 0; r < m.rows.length; r++) {
@@ -297,9 +326,10 @@
     }
     var bar = document.createElement('div');
     bar.className = 'tm-tbl-bar';
-    var sum = document.createElement('span');
-    sum.className = 'tm-tbl-sum';
-    bar.appendChild(sum);
+
+    // ---- 第 1 行：列筛选按钮（垂直小方块，按列对齐） ----
+    var cfRow = document.createElement('div');
+    cfRow.className = 'tm-tbl-cf-row';
     var hasActive = false;
     for (c = 0; c < m.cols.length; c++) {
       cell = document.createElement('span');
@@ -314,6 +344,7 @@
       nm = document.createElement('span');
       nm.className = 'tm-cf-name';
       nm.textContent = m.cols[c] || '(无表头)';
+      nm.title = nm.textContent;
       btn.appendChild(nm);
       num = document.createElement('span');
       num.className = 'tm-cf-num';
@@ -323,22 +354,37 @@
         btn.classList.add('active');
         num.textContent = s.size + '/' + colValues(m, c).length;
         hasActive = true;
+      } else {
+        // 未激活也显示总数（视觉一致，让用户感知可点击）
+        var totalVals = colValues(m, c).length;
+        num.textContent = totalVals > 0 ? String(totalVals) : '·';
       }
       cell.appendChild(btn);
-      bar.appendChild(cell);
+      cfRow.appendChild(cell);
     }
+    bar.appendChild(cfRow);
+
+    // ---- 第 2 行：操作条 —— 可视行数 + 清除筛选 + +列 ----
+    var opRow = document.createElement('div');
+    opRow.className = 'tm-tbl-op-row';
+    var sum = document.createElement('span');
+    sum.className = 'tm-tbl-sum';
+    sum.textContent = visible + ' / ' + m.rows.length + ' 行';
+    opRow.appendChild(sum);
     var clearBtn = document.createElement('button');
     clearBtn.type = 'button';
     clearBtn.className = 'tm-tbl-clear';
     clearBtn.textContent = '清除筛选';
-    if (!hasActive) clearBtn.style.display = 'none';
-    bar.appendChild(clearBtn);
+    if (!hasActive) clearBtn.disabled = true;
+    opRow.appendChild(clearBtn);
     var addColBtn = document.createElement('button');
     addColBtn.type = 'button';
     addColBtn.className = 'tm-tbl-addcol';
     addColBtn.textContent = '+ 列';
     addColBtn.title = '在表格中新增一列（新增列单元格可直接填写并回写 md）';
-    bar.appendChild(addColBtn);
+    opRow.appendChild(addColBtn);
+    bar.appendChild(opRow);
+
     return bar;
   }
 
@@ -490,8 +536,14 @@
     for (var h = 0; h < headRow.cells.length; h++) {
       cols.push(cellText(headRow.cells[h]));
       headRow.cells[h].setAttribute('data-col', String(h));
-      addThAddBtn(headRow.cells[h], h);
+      addThDelBtn(headRow.cells[h], h);
+      // 给每行对应 td 也设置 data-col（cb-cell 点击 / 单元格回写定位列索引）
+      for (var r = 0; r < tbody.rows.length; r++) {
+        var td0 = tbody.rows[r].cells[h];
+        if (td0) td0.setAttribute('data-col', String(h));
+      }
     }
+    markCheckboxCells(table); // [ ]/[x] 文本 → 可点击 checkbox 单元格（须在 markEmptyCells 前）
     markEmptyCells(table);
     var numCols = detectNumCols(table, headRow);
     for (var nc = 0; nc < numCols.length && nc < headRow.cells.length; nc++) {
@@ -512,6 +564,26 @@
     table.parentNode.insertBefore(wrap, table);
     wrap.appendChild(table);
     applyFilter(model); // 统一重挂载（行过滤 + 工具栏 + 弹层刷新）
+    bindColumnDrag(model); // 编辑模式开启后可用拖拽换列
+    applyDraggableToModel(model); // 同步当前编辑模式状态到 th.draggable
+  }
+
+  /** 编辑模式开关后调用：把所有表格的 th.draggable 与当前模式对齐 */
+  function applyDraggableToAllTables() {
+    var tables = document.querySelectorAll('.markdown-body table');
+    for (var i = 0; i < tables.length; i++) {
+      var mod = tables[i].__tmModel;
+      if (mod) applyDraggableToModel(mod);
+    }
+  }
+
+  function applyDraggableToModel(model) {
+    var headRow = model.table.tHead && model.table.tHead.rows[0];
+    if (!headRow) return;
+    var on = isEditMode();
+    for (var i = 0; i < headRow.cells.length; i++) {
+      headRow.cells[i].draggable = on;
+    }
   }
 
   function initTableFilters() {
@@ -532,17 +604,12 @@
       if (act && act.tagName === 'BUTTON') handleAction(act);
       return; // 点击弹层内部不关闭
     }
-    // 表头悬停 + 按钮：在对应列右侧新增一列
-    var thAddEl = closest(t, '.tm-th-add');
-    if (thAddEl) {
-      var wrapA = closest(thAddEl, '.tm-tbl');
-      var tblA = wrapA ? wrapA.querySelector('table') : null;
-      if (tblA) {
-        var thEl = closest(thAddEl, 'th');
-        var ci = thEl ? (parseInt(thEl.getAttribute('data-col'), 10) || 0) + 1 : 0;
-        openAddColPopup(tblA, ci, function () { return thAddEl; }, wrapA);
-        return;
-      }
+    // 表头 × 按钮：删除该列（两段式确认，避免误删）
+    var thDelEl = closest(t, '.tm-th-del');
+    if (thDelEl) {
+      e.stopPropagation();
+      handleDeleteColumnClick(thDelEl);
+      return;
     }
     // 工具栏 + 列按钮：在表格末尾新增一列
     var addColBtnEl = closest(t, '.tm-tbl-addcol');
@@ -581,6 +648,7 @@
     closeOutline();
     closeThemePop();
     cancelResetConfirm(); // 点击页面其他位置 → 取消重置确认态
+    cancelAllDelConfirm(); // 取消所有列删除确认态
   });
 
   document.addEventListener('change', function (e) {
@@ -623,7 +691,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
-      closePopup(); closeOutline(); closeAddColPopup(); closeThemePop(); cancelResetConfirm();
+      closePopup(); closeOutline(); closeAddColPopup(); closeThemePop(); cancelResetConfirm(); cancelAllDelConfirm();
     }
   });
 
@@ -632,15 +700,18 @@
   // ---- 表格列编辑：新增列（任意位置）+ 新增列单元格直接填写回写 ----
   var addColPopover = null;
   var addColModel = null; // { table, colIndex }
+  var addColType = 'text';     // 'text' | 'checkbox'
+  var addColCbVal = '[ ]';     // 复选框默认状态
 
-  /** 表头悬停 + 按钮（在该列右侧插入新列） */
-  function addThAddBtn(th, colIndex) {
+  /** 表头左侧 × 按钮：删除该列（编辑模式下常驻可见） */
+  function addThDelBtn(th, colIndex) {
+    if (th.querySelector(':scope > .tm-th-del')) return;
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'tm-th-add';
-    btn.title = '在右侧添加列';
-    btn.textContent = '+';
+    btn.className = 'tm-th-del';
+    btn.title = '删除该列';
     btn.setAttribute('data-col', String(colIndex));
+    btn.textContent = '×';
     th.appendChild(btn);
   }
 
@@ -655,37 +726,125 @@
         '<span class="tm-ac-title">添加列</span>' +
         '<button type="button" class="tm-ac-close" title="取消">×</button>' +
         '</div>' +
-        '<div class="tm-ac-hint"></div>' +
         '<input class="tm-ac-name" type="text" placeholder="列名，回车确认"/>' +
+        '<div class="tm-ac-type-row">' +
+        '<span class="tm-ac-label">列类型</span>' +
+        '<button type="button" class="tm-ac-type" data-type="text">文本</button>' +
+        '<button type="button" class="tm-ac-type" data-type="checkbox">复选框</button>' +
+        '</div>' +
+        '<div class="tm-ac-fill-row" data-show="text">' +
+        '<input class="tm-ac-fill" type="text" placeholder="批量填值（可空）"/>' +
+        '</div>' +
+        '<div class="tm-ac-cb-row" data-show="checkbox" style="display:none">' +
+        '<span class="tm-ac-label">默认状态</span>' +
+        '<button type="button" class="tm-ac-cb-default" data-val="[ ]">☐ 未勾</button>' +
+        '<button type="button" class="tm-ac-cb-default" data-val="[x]">☑ 已勾</button>' +
+        '</div>' +
+        '<div class="tm-ac-pos-row">' +
+        '<span class="tm-ac-label">插入位置</span>' +
+        '<select class="tm-ac-pos-select"></select>' +
+        '<button type="button" class="tm-ac-pos-side active" data-side="after">之后</button>' +
+        '<button type="button" class="tm-ac-pos-side" data-side="before">之前</button>' +
+        '</div>' +
         '<div class="tm-ac-actions">' +
         '<button type="button" class="tm-ac-cancel">取消</button>' +
         '<button type="button" class="tm-ac-ok">确定</button>' +
         '</div>';
-      addColPopover = tmPopover({ content: pop, maxWidth: 300, maxHeight: 220, gap: 6 });
+      addColPopover = tmPopover({ content: pop, maxWidth: 320, maxHeight: 320, gap: 6 });
 
       var nameInput = pop.querySelector('.tm-ac-name');
-      nameInput.addEventListener('keydown', function (e) {
+      var fillInput = pop.querySelector('.tm-ac-fill');
+      function submitOnEnter(e) {
         if (e.key === 'Enter') { e.preventDefault(); confirmAddCol(); }
         if (e.key === 'Escape') { e.preventDefault(); closeAddColPopup(); }
-      });
+      }
+      nameInput.addEventListener('keydown', submitOnEnter);
+      fillInput.addEventListener('keydown', submitOnEnter);
       nameInput.addEventListener('click', function (e) { e.stopPropagation(); });
+      fillInput.addEventListener('click', function (e) { e.stopPropagation(); });
       pop.querySelector('.tm-ac-ok').addEventListener('click', confirmAddCol);
       pop.querySelector('.tm-ac-cancel').addEventListener('click', closeAddColPopup);
       pop.querySelector('.tm-ac-close').addEventListener('click', closeAddColPopup);
+
+      // 列类型切换：文本 / 复选框
+      var typeBtns = pop.querySelectorAll('.tm-ac-type');
+      for (var ti = 0; ti < typeBtns.length; ti++) {
+        typeBtns[ti].addEventListener('click', function (e) {
+          e.stopPropagation();
+          setAddColType(e.currentTarget.getAttribute('data-type'));
+        });
+      }
+      // 复选框默认状态选择
+      var cbBtns = pop.querySelectorAll('.tm-ac-cb-default');
+      for (var ci = 0; ci < cbBtns.length; ci++) {
+        cbBtns[ci].addEventListener('click', function (e) {
+          e.stopPropagation();
+          addColCbVal = e.currentTarget.getAttribute('data-val');
+          syncAddColCbButtons();
+        });
+      }
+      // 插入位置：前/后切换
+      var sideBtns = pop.querySelectorAll('.tm-ac-pos-side');
+      for (var si = 0; si < sideBtns.length; si++) {
+        sideBtns[si].addEventListener('click', function (e) {
+          e.stopPropagation();
+          var side = e.currentTarget.getAttribute('data-side');
+          for (var sj = 0; sj < sideBtns.length; sj++) {
+            sideBtns[sj].classList.toggle('active', sideBtns[sj].getAttribute('data-side') === side);
+          }
+        });
+      }
     }
     return addColPopover.el;
   }
 
+  function setAddColType(type) {
+    addColType = type;
+    var pop = getAddColPopup();
+    var textRow = pop.querySelector('[data-show="text"]');
+    var cbRow = pop.querySelector('[data-show="checkbox"]');
+    textRow.style.display = type === 'text' ? '' : 'none';
+    cbRow.style.display = type === 'checkbox' ? '' : 'none';
+    var typeBtns = pop.querySelectorAll('.tm-ac-type');
+    for (var i = 0; i < typeBtns.length; i++) {
+      typeBtns[i].classList.toggle('active', typeBtns[i].getAttribute('data-type') === type);
+    }
+    syncAddColCbButtons();
+  }
+
+  function syncAddColCbButtons() {
+    var pop = getAddColPopup();
+    var btns = pop.querySelectorAll('.tm-ac-cb-default');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-val') === addColCbVal);
+    }
+  }
+
   function openAddColPopup(table, colIndex, anchorFn, wrap) {
-    addColModel = { table: table, colIndex: colIndex };
+    addColModel = { table: table };
     var pop = getAddColPopup();
     pop.querySelector('.tm-ac-name').value = '';
-    var hint = pop.querySelector('.tm-ac-hint');
+    pop.querySelector('.tm-ac-fill').value = '';
+    setAddColType('text');
+    addColCbVal = '[ ]';
+    syncAddColCbButtons();
+    // 填充位置下拉：末尾 + 每个列名
+    var sel = pop.querySelector('.tm-ac-pos-select');
     var model = table.__tmModel;
-    var total = model ? model.cols.length : 0;
-    hint.textContent = colIndex >= total
-      ? '将在表格末尾添加新列'
-      : '将在「' + ((model && model.cols[colIndex]) || '(空)') + '」之前添加新列';
+    var cols = model ? model.cols : [];
+    sel.innerHTML = '<option value="end">末尾</option>';
+    for (var i = 0; i < cols.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = cols[i] || '(无表头)';
+      sel.appendChild(opt);
+    }
+    sel.value = 'end';
+    // 默认「之后」
+    var sideBtns = pop.querySelectorAll('.tm-ac-pos-side');
+    for (var si = 0; si < sideBtns.length; si++) {
+      sideBtns[si].classList.toggle('active', sideBtns[si].getAttribute('data-side') === 'after');
+    }
     addColPopover.show(anchorFn, wrap);
     pop.querySelector('.tm-ac-name').focus();
   }
@@ -701,15 +860,36 @@
     var pop = getAddColPopup();
     var name = (pop.querySelector('.tm-ac-name').value || '').trim();
     var headerLine = parseInt(m.table.getAttribute('data-source-line'), 10) || 0;
+    // 从位置下拉 + 前/后按钮计算 colIndex
+    var sel = pop.querySelector('.tm-ac-pos-select');
+    var sideBtn = pop.querySelector('.tm-ac-pos-side.active');
+    var side = sideBtn ? sideBtn.getAttribute('data-side') : 'after';
+    var posVal = sel ? sel.value : 'end';
+    var colIndex;
+    if (posVal === 'end') {
+      colIndex = (m.table.__tmModel ? m.table.__tmModel.cols.length : 0);
+    } else {
+      var targetIdx = parseInt(posVal, 10) || 0;
+      colIndex = side === 'before' ? targetIdx : targetIdx + 1;
+    }
+    var payload = { line: headerLine, colIndex: colIndex, name: name };
+    // 复选框类型：fillValue = 选中的默认状态（[ ] 或 [x]）
+    // 文本类型：fillValue = 输入框值（可空）
+    if (addColType === 'checkbox') {
+      payload.fillValue = addColCbVal;
+    } else {
+      var fillRaw = (pop.querySelector('.tm-ac-fill').value || '').trim();
+      if (fillRaw) payload.fillValue = fillRaw;
+    }
     fetch(api('/api/table/add-column'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line: headerLine, colIndex: m.colIndex, name: name }),
+      body: JSON.stringify(payload),
     })
       .then(function (res) { return res.json().then(function (d) { return { status: res.status, data: d }; }); })
       .then(function (r) {
         if (r.status === 200 && r.data.ok) {
-          localInsertColumn(m.table, r.data.colIndex, r.data.name);
+          localInsertColumn(m.table, r.data.colIndex, r.data.name, r.data.fillValue || '');
           var model = m.table.__tmModel;
           if (model) {
             // 已生效的过滤列在插入位置及之后要整体右移一位
@@ -736,32 +916,307 @@
       });
   }
 
-  /** 本地 DOM 同步插入列：th（带 + 按钮）+ 每行 contenteditable td */
-  function localInsertColumn(table, idx, name) {
+  /** 本地 DOM 同步插入列：th + 每行 contenteditable td */
+  function localInsertColumn(table, idx, name, fillValue) {
     var headRow = table.tHead && table.tHead.rows[0];
     if (!headRow) return;
     var th = document.createElement('th');
     th.textContent = name;
-    addThAddBtn(th, idx);
+    addThDelBtn(th, idx);
+    addThGrip(th);
+    th.draggable = isEditMode();
     if (idx >= headRow.cells.length) headRow.appendChild(th);
     else headRow.insertBefore(th, headRow.cells[idx]);
     for (var h = 0; h < headRow.cells.length; h++) {
       headRow.cells[h].setAttribute('data-col', String(h));
-      var b = headRow.cells[h].querySelector('.tm-th-add');
-      if (b) b.setAttribute('data-col', String(h));
+      var db = headRow.cells[h].querySelector('.tm-th-del');
+      if (db) db.setAttribute('data-col', String(h));
     }
     var tbody = table.tBodies[0];
     if (!tbody) return;
-    for (var i = 0; i < tbody.rows.length; i++) {
+    // checkbox 列判定：fillValue 是 [x] / [ ] 时整列渲染为可点击 checkbox
+    var isCb = fillValue === '[x]' || fillValue === '[ ]';
+    for (var ii = 0; ii < tbody.rows.length; ii++) {
       var td = document.createElement('td');
-      td.className = 'tm-edit-cell';
-      td.setAttribute('contenteditable', 'true');
+      if (isCb) {
+        td.className = 'tm-cb-cell';
+        td.setAttribute('data-checked', fillValue === '[x]' ? '1' : '0');
+        td.setAttribute('data-cb-value', fillValue);
+        var glyph = document.createElement('span');
+        glyph.className = 'tm-cb-glyph';
+        if (fillValue === '[x]') glyph.textContent = '✓';
+        td.appendChild(glyph);
+        td.title = '点击切换 [x] / [ ]';
+      } else {
+        td.className = 'tm-edit-cell';
+        td.setAttribute('contenteditable', 'true');
+        td.title = '点击填写，自动回写 md';
+        if (fillValue) {
+          td.textContent = fillValue;
+        }
+      }
       td.setAttribute('data-col', String(idx));
-      td.title = '点击填写，自动回写 md';
-      var row = tbody.rows[i];
+      var row = tbody.rows[ii];
       if (idx >= row.cells.length) row.appendChild(td);
       else row.insertBefore(td, row.cells[idx]);
     }
+    bindColumnDragOnTh(th, idx);
+  }
+
+  /** 给 th 注入拖拽手柄（仅初始化一次） */
+  function addThGrip(th) {
+    if (th.querySelector(':scope > .tm-th-grip')) return;
+    var grip = document.createElement('span');
+    grip.className = 'tm-th-grip';
+    grip.setAttribute('draggable', 'false');
+    grip.title = '拖动换列（编辑模式下可用）';
+    grip.textContent = '⋮⋮';
+    th.insertBefore(grip, th.firstChild);
+  }
+
+  /** 拖拽换列：编辑模式下 th.draggable=true 时启用 */
+  function bindColumnDrag(model) {
+    var headRow = model.table.tHead && model.table.tHead.rows[0];
+    if (!headRow) return;
+    // 每个 th 加手柄（首次）
+    for (var c = 0; c < headRow.cells.length; c++) addThGrip(headRow.cells[c]);
+    // 拖拽状态（挂在 model 上，dragstart 时记录 from）
+    model.__drag = { from: -1 };
+    for (var k = 0; k < headRow.cells.length; k++) bindColumnDragOnTh(headRow.cells[k], k);
+  }
+
+  function bindColumnDragOnTh(th, idx) {
+    // 已绑过的事件不再重复挂
+    if (th.__tmDragBound) return;
+    th.__tmDragBound = true;
+    var model = (th.closest('.tm-tbl').querySelector('table')).__tmModel;
+    th.addEventListener('dragstart', function (e) {
+      if (!isEditMode()) { e.preventDefault(); return; }
+      model.__drag.from = idx;
+      th.classList.add('tm-dragging');
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(idx));
+      } catch (err) { /* 某些 webview 抛错，忽略 */ }
+    });
+    th.addEventListener('dragend', function () {
+      var headRow2 = th.parentNode;
+      clearDropMarkers(headRow2);
+      th.classList.remove('tm-dragging');
+      model.__drag.from = -1;
+    });
+    th.addEventListener('dragover', function (e) {
+      if (model.__drag.from < 0 || model.__drag.from === idx) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch (err) { /* ignore */ }
+      var r = th.getBoundingClientRect();
+      var side = e.clientX < r.left + r.width / 2 ? 'left' : 'right';
+      // 同列同侧无需刷新
+      if (model.__drag.overIdx === idx && model.__drag.overSide === side) return;
+      clearDropMarkers(th.parentNode);
+      model.__drag.overIdx = idx;
+      model.__drag.overSide = side;
+      th.classList.add(side === 'left' ? 'tm-drop-left' : 'tm-drop-right');
+    });
+    th.addEventListener('dragleave', function () {
+      th.classList.remove('tm-drop-left', 'tm-drop-right');
+    });
+    th.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var from = model.__drag.from;
+      var side = model.__drag.overSide;
+      if (from < 0) return;
+      // to 语义：side='left' → 移到该列之前 (to=idx)；side='right' → 移到该列之后 (to=idx+1)
+      var to = side === 'left' ? idx : idx + 1;
+      clearDropMarkers(th.parentNode);
+      th.classList.remove('tm-dragging');
+      model.__drag.from = -1;
+      model.__drag.overIdx = -1;
+      if (from === to || from + 1 === to) return;
+      submitColumnMove(model, from, to);
+    });
+  }
+
+  function clearDropMarkers(headRow) {
+    if (!headRow) return;
+    for (var i = 0; i < headRow.cells.length; i++) {
+      headRow.cells[i].classList.remove('tm-drop-left', 'tm-drop-right');
+    }
+  }
+
+  function submitColumnMove(model, from, to) {
+    var headerLine = parseInt(model.table.getAttribute('data-source-line'), 10) || 0;
+    fetch(api('/api/table/move-column'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line: headerLine, fromIndex: from, toIndex: to }),
+    })
+      .then(function (res) {
+        return res.json().then(function (d) { return { status: res.status, data: d }; });
+      })
+      .then(function (r) {
+        if (r.status === 200 && r.data.ok) {
+          localSwapColumns(model, from, to);
+          showToast('已交换列', false);
+          refreshHistoryButtons();
+        } else {
+          showToast(r.data.reason || '交换列失败 (status ' + r.status + ')', true);
+        }
+      })
+      .catch(function (err) {
+        console.error('[tickmark] move column failed:', err);
+        showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
+      });
+  }
+
+  /** 本地 DOM 同步交换列（与后端 moveColumnInFile 同 to 语义） */
+  function localSwapColumns(model, from, to) {
+    var table = model.table;
+    var headRow = table.tHead && table.tHead.rows[0];
+    if (!headRow) return;
+    var n = headRow.cells.length;
+    if (from < 0 || from >= n || to < 0 || to > n) return;
+
+    // 把 cells 数组按 from/to 重排（to 是插入前语义）
+    function reorder(cells) {
+      var arr = Array.prototype.slice.call(cells);
+      var m = arr.splice(from, 1)[0];
+      var ti = from < to ? to - 1 : to;
+      arr.splice(Math.max(0, Math.min(ti, arr.length)), 0, m);
+      return arr;
+    }
+
+    // 表头：按 document 顺序依次保证每个位置上是对的元素
+    var ths = reorder(headRow.cells);
+    for (var i = 0; i < ths.length; i++) {
+      if (headRow.cells[i] !== ths[i]) headRow.insertBefore(ths[i], headRow.cells[i] || null);
+      headRow.cells[i].setAttribute('data-col', String(i));
+      var db = headRow.cells[i].querySelector('.tm-th-del');
+      if (db) db.setAttribute('data-col', String(i));
+    }
+
+    var tbody = table.tBodies[0];
+    if (tbody) {
+      for (var r = 0; r < tbody.rows.length; r++) {
+        var row = tbody.rows[r];
+        var tds = reorder(row.cells);
+        for (var j = 0; j < tds.length; j++) {
+          if (row.cells[j] !== tds[j]) row.insertBefore(tds[j], row.cells[j] || null);
+          if (row.cells[j]) row.cells[j].setAttribute('data-col', String(j));
+        }
+      }
+    }
+
+    // 同步过滤模型：选中的列集合随列移动
+    var finalTo = from < to ? to - 1 : to;
+    var newSel = {};
+    for (var k2 in model.sel) {
+      if (!model.sel.hasOwnProperty(k2)) continue;
+      var kk = parseInt(k2, 10);
+      if (kk === from) newSel[finalTo] = model.sel[k2];
+      else if (from < kk && kk < to) newSel[kk - 1] = model.sel[k2];
+      else if (to <= kk && kk < from) newSel[kk + 1] = model.sel[k2];
+      else newSel[kk] = model.sel[k2];
+    }
+    model.sel = newSel;
+    model.cols = reorder(model.cols);
+    mountFilterBar(model);
+  }
+
+  // ---- 表格列删除：两段式确认（点 × 变红提示，再点一次执行） ----
+  function handleDeleteColumnClick(btn) {
+    // 已在确认态 → 第二次点击执行删除
+    if (btn.classList.contains('confirming')) {
+      btn.classList.remove('confirming');
+      btn.textContent = '×';
+      clearTimeout(btn.__tmDelTimer);
+      confirmDeleteColumn(btn);
+      return;
+    }
+    // 第一次点击 → 进入确认态（按钮变红显示「再点一次确认」，5s 后自动取消）
+    btn.classList.add('confirming');
+    btn.textContent = '!';
+    clearTimeout(btn.__tmDelTimer);
+    btn.__tmDelTimer = setTimeout(function () {
+      btn.classList.remove('confirming');
+      btn.textContent = '×';
+    }, 5000);
+  }
+
+  /** 取消所有列删除确认态（点击页面其他位置 / Escape 时调用） */
+  function cancelAllDelConfirm() {
+    var btns = document.querySelectorAll('.tm-th-del.confirming');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.remove('confirming');
+      btns[i].textContent = '×';
+      clearTimeout(btns[i].__tmDelTimer);
+    }
+  }
+
+  function confirmDeleteColumn(btn) {
+    var thEl = closest(btn, 'th');
+    if (!thEl) return;
+    var col = parseInt(btn.getAttribute('data-col'), 10) || 0;
+    var table = closest(btn, 'table');
+    if (!table || !table.isConnected) return;
+    var model = table.__tmModel;
+    if (!model) return;
+    var headerLine = parseInt(table.getAttribute('data-source-line'), 10) || 0;
+    var colName = model.cols[col] || '(无表头)';
+    fetch(api('/api/table/delete-column'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line: headerLine, colIndex: col }),
+    })
+      .then(function (res) {
+        return res.json().then(function (d) { return { status: res.status, data: d }; });
+      })
+      .then(function (r) {
+        if (r.status === 200 && r.data.ok) {
+          localRemoveColumn(model, col);
+          showToast('已删除列「' + colName + '」', false);
+          refreshHistoryButtons();
+        } else {
+          showToast(r.data.reason || '删除列失败 (status ' + r.status + ')', true);
+        }
+      })
+      .catch(function (err) {
+        console.error('[tickmark] delete column failed:', err);
+        showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
+      });
+  }
+
+  /** 本地 DOM 同步移除列：th + 每行 td；同步 data-col / 过滤模型 */
+  function localRemoveColumn(model, idx) {
+    var headRow = model.table.tHead && model.table.tHead.rows[0];
+    if (!headRow || idx < 0 || idx >= headRow.cells.length) return;
+    headRow.cells[idx].remove();
+    for (var h = 0; h < headRow.cells.length; h++) {
+      headRow.cells[h].setAttribute('data-col', String(h));
+      var db = headRow.cells[h].querySelector('.tm-th-del');
+      if (db) db.setAttribute('data-col', String(h));
+    }
+    var tbody = model.table.tBodies[0];
+    if (tbody) {
+      for (var r = 0; r < tbody.rows.length; r++) {
+        var td = tbody.rows[r].cells[idx];
+        if (td) td.remove();
+        for (var c = 0; c < tbody.rows[r].cells.length; c++) {
+          tbody.rows[r].cells[c].setAttribute('data-col', String(c));
+        }
+      }
+    }
+    // 同步过滤模型：删除该列的过滤集合；大于 idx 的列整体左移一位
+    var newSel = {};
+    for (var k in model.sel) {
+      if (!model.sel.hasOwnProperty(k)) continue;
+      var kk = parseInt(k, 10);
+      if (kk === idx) continue;
+      newSel[kk > idx ? kk - 1 : kk] = model.sel[k];
+    }
+    model.sel = newSel;
+    model.cols.splice(idx, 1);
+    mountFilterBar(model);
   }
 
   /** 可编辑单元格提交：blur / Enter 时回写该列值 */
@@ -819,6 +1274,56 @@
       t.blur();
     }
   });
+
+  // ---- Checkbox 列单元格点击：切换 [x] ⇄ [ ] 并回写 md ----
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    // 点击可能命中内部的 .tm-cb-glyph span → 用 closest 找到 td.tm-cb-cell
+    var cbCell = closest(t, '.tm-cb-cell');
+    if (!cbCell) return;
+    e.stopPropagation();
+    var cur = cbCell.getAttribute('data-checked') === '1';
+    var nextChecked = !cur;
+    var nextValue = nextChecked ? '[x]' : '[ ]';
+    var oldValue = cur ? '[x]' : '[ ]';
+    // 乐观更新：先改 UI，再异步回写
+    cbCell.setAttribute('data-checked', nextChecked ? '1' : '0');
+    cbCell.setAttribute('data-cb-value', nextValue);
+    var glyph = cbCell.querySelector('.tm-cb-glyph');
+    if (glyph) glyph.textContent = nextChecked ? '\u2713' : '';
+    submitCbCellEdit(cbCell, nextValue, oldValue);
+  });
+
+  function submitCbCellEdit(td, value, oldValue) {
+    var tr = td.parentNode;
+    var line = tr && tr.getAttribute ? (parseInt(tr.getAttribute('data-source-line'), 10) || 0) : 0;
+    var col = parseInt(td.getAttribute('data-col'), 10) || 0;
+    fetch(api('/api/table/set-cell'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line: line, colIndex: col, value: value }),
+    })
+      .then(function (res) { return res.json().then(function (d) { return { status: res.status, data: d }; }); })
+      .then(function (r) {
+        if (r.status === 200 && r.data.ok) {
+          refreshHistoryButtons();
+        } else {
+          // 回滚
+          td.setAttribute('data-checked', value === '[x]' ? '0' : '1');
+          td.setAttribute('data-cb-value', oldValue);
+          var g = td.querySelector('.tm-cb-glyph');
+          if (g) g.textContent = oldValue === '[x]' ? '✓' : '';
+          showToast(r.data.reason || '写入失败 (status ' + r.status + ')', true);
+        }
+      })
+      .catch(function (err) {
+        td.setAttribute('data-checked', value === '[x]' ? '0' : '1');
+        td.setAttribute('data-cb-value', oldValue);
+        var g2 = td.querySelector('.tm-cb-glyph');
+        if (g2) g2.textContent = oldValue === '[x]' ? '✓' : '';
+        showToast('无法连接 TickMark 服务，请确认 CLI 仍在运行', true);
+      });
+  }
 
   // ---- 修改历史：撤销 / 重做 / 取消本次所有修改 ----
   var historyBtns = null; // { undo, redo, reset }
@@ -932,6 +1437,33 @@
     refreshHistoryButtons();
   }
 
+  // ---- 编辑模式：拖拽换列 / 添加列 / 单元格填写 ----
+  // 状态：true → html 标签加 .tm-edit-mode，CSS 显示拖拽手柄 + 列加 +
+  //      Sync 重建表格后 DOM 状态由 setupTableFilter 自动感知当前类名决定是否挂拖拽
+  var editToggle = null;
+
+  function setEditMode(on) {
+    if (on) document.documentElement.classList.add('tm-edit-mode');
+    else document.documentElement.classList.remove('tm-edit-mode');
+    if (editToggle) editToggle.classList.toggle('active', on);
+    applyDraggableToAllTables();
+  }
+
+  function isEditMode() {
+    return document.documentElement.classList.contains('tm-edit-mode');
+  }
+
+  function initEditToggle() {
+    editToggle = document.getElementById('tm-edit-toggle');
+    if (!editToggle) return;
+    editToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setEditMode(!isEditMode());
+    });
+    // 初始态：关闭（页面默认非编辑模式，避免误拖拽）
+    setEditMode(false);
+  }
+
   // ---- 大纲（TOC）：标题树 + 点击跳转 + 滚动高亮 ----
   var TOC_OFFSET = 56;          // sticky 工具栏高度 + 余量
   var tocWrap = null;
@@ -947,6 +1479,7 @@
   // 若提前调用会把已设置的 tocPanel/tocToggle 引用重置为 null → 初次点击无反应
   initOutline();
   initHistoryButtons();
+  initEditToggle();
 
   function ensureOutlineToggle() {
     // 幂等：以 DOM 为准。若 DOM 已存在（残留 / 重复初始化）直接复用，

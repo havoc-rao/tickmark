@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MarkdownEngine } from './markdownEngine';
 import { toggleCheckboxInFile } from './checkbox';
-import { addColumnInFile, setCellInFile } from './table';
+import { addColumnInFile, deleteColumnInFile, moveColumnInFile, setCellInFile } from './table';
 import { renderPage, renderStandalonePage } from './page';
 
 export interface ServeResult {
@@ -138,11 +138,50 @@ export function startServer(
       if (url.pathname === '/api/table/add-column' && req.method === 'POST') {
         const body = await readBody(req);
         const data = JSON.parse(body);
+        // fillValue（可选）：批量填入每个数据行单元格，如 `[x]` 渲染为勾选 checkbox
+        const fillValue =
+          typeof data.fillValue === 'string' ? data.fillValue : undefined;
         const result = addColumnInFile(
           absPath,
           Number(data.line),
           Number(data.colIndex),
           String(data.name ?? ''),
+          fillValue !== undefined ? { fillValue } : {},
+        );
+        if (result.ok) recordChange();
+        res.writeHead(result.ok ? 200 : 409, {
+          'Content-Type': 'application/json; charset=utf-8',
+        });
+        res.end(JSON.stringify(result));
+        return;
+      }
+
+      // API: 表格列移动（编辑模式下拖拽列头 → 改列顺序；行数不变，行号稳定）
+      if (url.pathname === '/api/table/move-column' && req.method === 'POST') {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = moveColumnInFile(
+          absPath,
+          Number(data.line),
+          Number(data.fromIndex),
+          Number(data.toIndex),
+        );
+        if (result.ok) recordChange();
+        res.writeHead(result.ok ? 200 : 409, {
+          'Content-Type': 'application/json; charset=utf-8',
+        });
+        res.end(JSON.stringify(result));
+        return;
+      }
+
+      // API: 表格列删除（编辑模式下点 th 删除按钮 → 移除整列；行数不变，行号稳定）
+      if (url.pathname === '/api/table/delete-column' && req.method === 'POST') {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = deleteColumnInFile(
+          absPath,
+          Number(data.line),
+          Number(data.colIndex),
         );
         if (result.ok) recordChange();
         res.writeHead(result.ok ? 200 : 409, {

@@ -8,6 +8,31 @@ export interface AddColumnResult {
   colIndex?: number;
   /** 实际写入的列名 */
   name?: string;
+  /** 实际写入的批量填值（trim 后），未传 fillValue 时为空串 */
+  fillValue?: string;
+}
+
+export interface AddColumnOptions {
+  /** 新增列每个数据行单元格的初始值（默认空串；如 `[x]` 可渲染为勾选 checkbox） */
+  fillValue?: string;
+}
+
+export interface MoveColumnResult {
+  ok: boolean;
+  reason?: string;
+  /** 实际 from 位置（已 clamp 到合法范围） */
+  fromIndex?: number;
+  /** 实际 to 位置：移动后该列的最终索引 */
+  toIndex?: number;
+}
+
+export interface DeleteColumnResult {
+  ok: boolean;
+  reason?: string;
+  /** 实际删除位置（已 clamp 到合法范围） */
+  colIndex?: number;
+  /** 删除后剩余列数 */
+  remaining?: number;
 }
 
 export interface SetCellResult {
@@ -151,6 +176,7 @@ export function addColumnInFile(
   headerLine: number,
   colIndex: number,
   name: string,
+  opts: AddColumnOptions = {},
 ): AddColumnResult {
   const content = fs.readFileSync(filePath, 'utf8');
   const engine = new MarkdownEngine();
@@ -169,15 +195,18 @@ export function addColumnInFile(
   const sepRow = parseRow(lines[range.start + 1] ?? '');
   lines[range.start + 1] = rebuildRow(sepRow, insertAt(dataCells(sepRow), idx, '---'));
 
+  // 批量填值：fillValue 适用于数据行每个新增单元格（表头与分隔行不动）
+  // 例：fillValue = '[x]' → markdown-it-task-lists 把该列渲染为勾选 checkbox
+  const fill = escapeCell(String(opts.fillValue ?? '').trim());
   for (let l = range.start + 2; l < range.end; l++) {
     const row = parseRow(lines[l] ?? '');
     const cells = dataCells(row);
     if (!cells.length) continue;
-    lines[l] = rebuildRow(row, insertAt(cells, idx, ''));
+    lines[l] = rebuildRow(row, insertAt(cells, idx, fill));
   }
 
   fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
-  return { ok: true, colIndex: idx, name: cleanName };
+  return { ok: true, colIndex: idx, name: cleanName, fillValue: fill };
 }
 
 /**
@@ -204,4 +233,115 @@ export function setCellInFile(
   lines[line] = newText;
   fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
   return { ok: true, line, colIndex: idx, newLineText: newText };
+}
+
+/**
+ * 把表头所在表格的 fromIndex 列移动到 toIndex 位置（to 是「移到该列之前」语义）。
+ * 同步更新表头、分隔行与所有数据行；只换顺序，不改列内容。
+ * 行数不变 → data-source-line 全部保持稳定。
+ */
+export function moveColumnInFile(
+  filePath: string,
+  headerLine: number,
+  fromIndex: number,
+  toIndex: number,
+): MoveColumnResult {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const engine = new MarkdownEngine();
+  const range = findTableRange(engine, content, headerLine);
+  if (!range) {
+    return { ok: false, reason: `line ${headerLine} is not a table header` };
+  }
+
+  const lines = content.split('\n');
+  const headerCells = dataCells(parseRow(lines[range.start]));
+  const n = headerCells.length;
+  if (n < 2) {
+    return { ok: false, reason: 'table has fewer than 2 columns' };
+  }
+
+  const from = clamp(Math.trunc(fromIndex) || 0, 0, n - 1);
+  // to 是「插入前」的列索引；clamp 到 [0, n]
+  let to = clamp(Math.trunc(toIndex) || 0, 0, n);
+  if (from === to || from + 1 === to) {
+    return { ok: false, reason: 'no move needed' };
+  }
+
+  // 把 from 列抽出后再插入到目标位置；from < to 时插入索引需 -1（已先移除一列）
+  function reorder(cells: string[]): string[] {
+    if (!cells.length) return cells;
+    const ci = clamp(from, 0, cells.length - 1);
+    const ti = clamp(from < to ? to - 1 : to, 0, cells.length);
+    if (ci === ti || ci + 1 === ti) return cells;
+    const out = cells.slice();
+    const moved = out.splice(ci, 1)[0];
+    out.splice(ti, 0, moved);
+    return out;
+  }
+
+  lines[range.start] = rebuildRow(parseRow(lines[range.start]), reorder(headerCells));
+
+  const sepRow = parseRow(lines[range.start + 1] ?? '');
+  lines[range.start + 1] = rebuildRow(sepRow, reorder(dataCells(sepRow)));
+
+  for (let l = range.start + 2; l < range.end; l++) {
+    const row = parseRow(lines[l] ?? '');
+    const cells = dataCells(row);
+    if (!cells.length) continue;
+    lines[l] = rebuildRow(row, reorder(cells));
+  }
+
+  fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+  const finalTo = from < to ? to - 1 : to;
+  return { ok: true, fromIndex: from, toIndex: finalTo };
+}
+
+/**
+ * 删除表头所在表格的第 colIndex 列。
+ * 同步更新表头、分隔行与所有数据行；行数不变 → data-source-line 全部保持稳定。
+ * 单列表拒绝删除（保留表骨架）。
+ */
+export function deleteColumnInFile(
+  filePath: string,
+  headerLine: number,
+  colIndex: number,
+): DeleteColumnResult {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const engine = new MarkdownEngine();
+  const range = findTableRange(engine, content, headerLine);
+  if (!range) {
+    return { ok: false, reason: `line ${headerLine} is not a table header` };
+  }
+
+  const lines = content.split('\n');
+  const headerCells = dataCells(parseRow(lines[range.start]));
+  const n = headerCells.length;
+  if (n <= 1) {
+    return { ok: false, reason: 'table has only one column' };
+  }
+
+  const idx = clamp(Math.trunc(colIndex) || 0, 0, n - 1);
+
+  function removeAt(cells: string[]): string[] {
+    if (!cells.length) return cells;
+    const ci = clamp(idx, 0, cells.length - 1);
+    const out = cells.slice();
+    out.splice(ci, 1);
+    return out;
+  }
+
+  lines[range.start] = rebuildRow(parseRow(lines[range.start]), removeAt(headerCells));
+
+  const sepRow = parseRow(lines[range.start + 1] ?? '');
+  lines[range.start + 1] = rebuildRow(sepRow, removeAt(dataCells(sepRow)));
+
+  for (let l = range.start + 2; l < range.end; l++) {
+    const row = parseRow(lines[l] ?? '');
+    const cells = dataCells(row);
+    if (!cells.length) continue;
+    lines[l] = rebuildRow(row, removeAt(cells));
+  }
+
+  fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+  return { ok: true, colIndex: idx, remaining: n - 1 };
 }
